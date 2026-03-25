@@ -4,15 +4,14 @@ set -o errexit
 
 echo ">>> Building Frontend..."
 cd frontend
-npm install
+npm install --include=dev
 npm run build
 cd ..
 
 echo ">>> Building Backend..."
 cd backend
-npm install
+npm install --include=dev
 npx prisma generate
-# Optional: npx prisma migrate deploy # Un-comment if using Render database migrations
 cd ..
 
 echo ">>> Deployment Ready!"
