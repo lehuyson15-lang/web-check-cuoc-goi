@@ -15,3 +15,4 @@ npx prisma generate
 cd ..
 
 echo ">>> Deployment Ready!"
+
