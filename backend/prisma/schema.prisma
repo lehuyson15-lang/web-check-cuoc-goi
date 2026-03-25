@@ -1,0 +1,140 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id                      String         @id @default(uuid())
+  name                    String
+  email                   String         @unique
+  password                String
+  role                    Role           @default(USER)
+  extensionVoip           String?
+  createdAt               DateTime       @default(now())
+  updatedAt               DateTime       @updatedAt
+  address                 String?
+  department              String?
+  emergencyContact        String?
+  gender                  String?
+  joinDate                DateTime?      @default(now())
+  phoneNumber             String?
+  status                  String?        @default("online")
+  targetCallsPerDay       Int?           @default(50)
+  targetConversionsPerDay Int?           @default(5)
+  calls                   Call[]
+  leads                   Lead[]
+  notifications           Notification[]
+
+  @@map("users")
+}
+
+model Call {
+  id                String              @id @default(uuid())
+  userId            String
+  customerPhone     String
+  direction         CallDirection
+  source            CallSource
+  durationSeconds   Int
+  calledAt          DateTime
+  serviceType       String?
+  result            CallResult          @default(PENDING)
+  audioUrl          String?
+  transcriptStatus  TranscriptStatus    @default(PENDING)
+  notes             String?
+  createdAt         DateTime            @default(now())
+  updatedAt         DateTime            @updatedAt
+  customerName      String?
+  recallNotified30d Boolean             @default(false)
+  recallNotified3d  Boolean             @default(false)
+  recallNotified7d  Boolean             @default(false)
+  tags              CallTag[]
+  user              User                @relation(fields: [userId], references: [id])
+  segments          TranscriptSegment[]
+
+  @@map("calls")
+}
+
+model TranscriptSegment {
+  id         String   @id @default(uuid())
+  callId     String
+  speaker    String
+  startTime  Float
+  endTime    Float
+  text       String
+  confidence Float?
+  createdAt  DateTime @default(now())
+  call       Call     @relation(fields: [callId], references: [id], onDelete: Cascade)
+
+  @@map("transcript_segments")
+}
+
+model CallTag {
+  id        String   @id @default(uuid())
+  callId    String
+  tagType   String
+  tagValue  String
+  createdAt DateTime @default(now())
+  call      Call     @relation(fields: [callId], references: [id], onDelete: Cascade)
+
+  @@map("call_tags")
+}
+
+model Lead {
+  id            String   @id @default(uuid())
+  customerPhone String
+  customerName  String?
+  assignedToId  String
+  status        String   @default("NEW")
+  assignedAt    DateTime @default(now())
+  slaDeadline   DateTime
+  slaNotified   Boolean  @default(false)
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+  assignedTo    User     @relation(fields: [assignedToId], references: [id])
+
+  @@map("leads")
+}
+
+model Notification {
+  id        String   @id @default(uuid())
+  userId    String
+  message   String
+  isRead    Boolean  @default(false)
+  createdAt DateTime @default(now())
+  user      User     @relation(fields: [userId], references: [id])
+
+  @@map("notifications")
+}
+
+enum Role {
+  ADMIN
+  USER
+}
+
+enum CallDirection {
+  INBOUND
+  OUTBOUND
+}
+
+enum CallSource {
+  MANUAL
+  VOIP
+}
+
+enum CallResult {
+  CLOSED
+  PENDING
+  CALLBACK
+  NO_ANSWER
+}
+
+enum TranscriptStatus {
+  PENDING
+  PROCESSING
+  DONE
+  FAILED
+}
