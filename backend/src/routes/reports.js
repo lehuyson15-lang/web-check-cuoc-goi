@@ -67,4 +67,93 @@ router.get('/kpi', authMiddleware, adminMiddleware, async (req, res) => {
   }
 });
 
+// Call Report - Aggregated by day/month/year per employee
+router.get('/call-report', authMiddleware, async (req, res) => {
+  try {
+    const { mode = 'day', from, to, userId } = req.query;
+    const isAdmin = req.user.role === 'ADMIN';
+
+    // Build date filter
+    const now = new Date();
+    let dateFrom = from ? new Date(from) : new Date(now.getFullYear(), now.getMonth(), 1);
+    let dateTo = to ? new Date(to) : now;
+    // Set dateTo to end of day
+    dateTo.setHours(23, 59, 59, 999);
+
+    const where = {
+      calledAt: { gte: dateFrom, lte: dateTo },
+      ...(userId && userId !== 'all' ? { userId } : {}),
+      ...(!isAdmin ? { userId: req.user.userId } : {})
+    };
+
+    const calls = await prisma.call.findMany({
+      where,
+      include: { user: { select: { id: true, name: true } } },
+      orderBy: { calledAt: 'asc' }
+    });
+
+    // Get all employees for the report
+    const employees = isAdmin
+      ? await prisma.user.findMany({ select: { id: true, name: true }, orderBy: { name: 'asc' } })
+      : [{ id: req.user.userId, name: req.user.name || 'Bạn' }];
+
+    // Period key formatter
+    const getPeriodKey = (date) => {
+      const d = new Date(date);
+      if (mode === 'day') return d.toISOString().slice(0, 10); // YYYY-MM-DD
+      if (mode === 'month') return d.toISOString().slice(0, 7); // YYYY-MM
+      return String(d.getFullYear()); // YYYY
+    };
+
+    // Collect all unique periods
+    const periodSet = new Set();
+    calls.forEach(c => periodSet.add(getPeriodKey(c.calledAt)));
+    const periods = Array.from(periodSet).sort();
+
+    // Build data map: { userId: { period: { stats } } }
+    const data = {};
+    const totals = {};
+
+    // Initialize
+    employees.forEach(emp => { data[emp.id] = {}; });
+    periods.forEach(p => {
+      totals[p] = { totalCalls: 0, closed: 0, missed: 0, pending: 0, callback: 0, totalDuration: 0, notes: [] };
+    });
+
+    calls.forEach(c => {
+      const pk = getPeriodKey(c.calledAt);
+      const uid = c.userId;
+
+      if (!data[uid]) data[uid] = {};
+      if (!data[uid][pk]) {
+        data[uid][pk] = { totalCalls: 0, closed: 0, missed: 0, pending: 0, callback: 0, totalDuration: 0, notes: [] };
+      }
+
+      const cell = data[uid][pk];
+      cell.totalCalls++;
+      cell.totalDuration += c.durationSeconds || 0;
+      if (c.result === 'CLOSED') cell.closed++;
+      else if (c.result === 'NO_ANSWER') cell.missed++;
+      else if (c.result === 'CALLBACK') cell.callback++;
+      else cell.pending++;
+      if (c.notes) cell.notes.push({ phone: c.customerPhone, name: c.customerName, notes: c.notes, result: c.result, calledAt: c.calledAt, duration: c.durationSeconds });
+
+      // Totals
+      const tot = totals[pk];
+      tot.totalCalls++;
+      tot.totalDuration += c.durationSeconds || 0;
+      if (c.result === 'CLOSED') tot.closed++;
+      else if (c.result === 'NO_ANSWER') tot.missed++;
+      else if (c.result === 'CALLBACK') tot.callback++;
+      else tot.pending++;
+      if (c.notes) tot.notes.push({ phone: c.customerPhone, name: c.customerName, notes: c.notes, result: c.result, calledAt: c.calledAt, duration: c.durationSeconds, empName: c.user?.name });
+    });
+
+    res.json({ employees, periods, data, totals });
+  } catch (error) {
+    console.error('[Call Report] Error:', error);
+    res.status(500).json({ message: 'Internal server error', error: error.message });
+  }
+});
+
 module.exports = router;

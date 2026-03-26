@@ -1567,95 +1567,249 @@ const PermMatrixPage = ({ permissions, onUpdate }) => {
   );
 };
 
-const ReportsPage = ({ calls, employees }) => {
-  const [tab, setTab] = useState("total");
-  const [selId, setSelId] = useState(null);
+const ReportsPage = () => {
+  const [mode, setMode] = useState("day");
+  const [from, setFrom] = useState(() => { const d = new Date(); d.setDate(d.getDate() - 6); return d.toISOString().slice(0,10); });
+  const [to, setTo] = useState(() => new Date().toISOString().slice(0,10));
+  const [filterUser, setFilterUser] = useState("all");
+  const [report, setReport] = useState(null);
+  const [loading, setLoading] = useState(true);
+  const [detailModal, setDetailModal] = useState(null); // { empName, period, notes[] }
 
-  const stats = useMemo(() => {
-    const total = calls.length;
-    const comp = calls.filter(c => c.status === "completed").length;
-    const miss = calls.filter(c => c.status === "missed").length;
-    return { total, comp, miss, rate: total ? (comp / total * 100).toFixed(1) : 0 };
-  }, [calls]);
+  const fetchReport = useCallback(async () => {
+    setLoading(true);
+    try {
+      const params = new URLSearchParams({ mode, from, to, userId: filterUser });
+      const res = await api.get(`/reports/call-report?${params}`);
+      setReport(res.data);
+    } catch (err) {
+      console.error("Report fetch error", err);
+    } finally {
+      setLoading(false);
+    }
+  }, [mode, from, to, filterUser]);
 
-  const empStats = useMemo(() => {
-    return employees.map(e => {
-      const ec = calls.filter(c => c.empId === e.id);
-      return { emp: e, total: ec.length, comp: ec.filter(c => c.status === "completed").length };
-    });
-  }, [calls, employees]);
+  useEffect(() => { fetchReport(); }, [fetchReport]);
 
-  const selCalls = useMemo(() => calls.filter(c => c.empId === selId), [calls, selId]);
+  // Quick date setters
+  const setQuick = (key) => {
+    const now = new Date();
+    const fmt = d => d.toISOString().slice(0,10);
+    if (key === "today") { setFrom(fmt(now)); setTo(fmt(now)); setMode("day"); }
+    else if (key === "7d") { const d = new Date(); d.setDate(d.getDate()-6); setFrom(fmt(d)); setTo(fmt(now)); setMode("day"); }
+    else if (key === "month") { setFrom(`${now.getFullYear()}-${String(now.getMonth()+1).padStart(2,"0")}-01`); setTo(fmt(now)); setMode("day"); }
+    else if (key === "year") { setFrom(`${now.getFullYear()}-01-01`); setTo(fmt(now)); setMode("month"); }
+  };
+
+  // Summary stats from totals
+  const summary = useMemo(() => {
+    if (!report) return { total: 0, closed: 0, missed: 0, rate: "0.0" };
+    const t = Object.values(report.totals || {}).reduce((acc, v) => ({
+      total: acc.total + v.totalCalls, closed: acc.closed + v.closed, missed: acc.missed + v.missed
+    }), { total: 0, closed: 0, missed: 0 });
+    return { ...t, rate: t.total > 0 ? (t.closed / t.total * 100).toFixed(1) : "0.0" };
+  }, [report]);
+
+  // Format period label for display
+  const periodLabel = (p) => {
+    if (mode === "day") { const [y,m,d] = p.split("-"); return `${d}/${m}`; }
+    if (mode === "month") { const [y,m] = p.split("-"); const names = ["","Th1","Th2","Th3","Th4","Th5","Th6","Th7","Th8","Th9","Th10","Th11","Th12"]; return `${names[parseInt(m)]}/${y.slice(2)}`; }
+    return p;
+  };
+
+  const fmtDur = (s) => `${Math.floor(s/60)}:${String(s%60).padStart(2,"0")}`;
+
+  const RESULT_LABEL = { CLOSED: "Chốt ✓", NO_ANSWER: "Nhỡ ✗", CALLBACK: "Gọi lại", PENDING: "Chờ xử lý" };
+  const RESULT_COLOR = { CLOSED: "var(--accent)", NO_ANSWER: "var(--danger)", CALLBACK: "var(--warn)", PENDING: "var(--text3)" };
+
+  // Filtered employees
+  const visibleEmps = useMemo(() => {
+    if (!report) return [];
+    if (filterUser === "all") return report.employees;
+    return report.employees.filter(e => e.id === filterUser);
+  }, [report, filterUser]);
 
   return (
     <div className="content">
-      <div className="sec-title">📈 Báo cáo vận hành</div>
-
-      <div className="mtabs" style={{ padding: 0, marginBottom: 20 }}>
-        <div className={`mtab ${tab === "total" ? "on" : ""}`} onClick={() => setTab("total")}>Tổng quan</div>
-        <div className={`mtab ${tab === "staff" ? "on" : ""}`} onClick={() => setTab("staff")}>Báo cáo nhân viên</div>
+      {/* Header */}
+      <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:18}}>
+        <div>
+          <div style={{fontSize:18,fontWeight:800}}>📊 Báo Cáo Cuộc Gọi & Ghi Chú</div>
+          <div style={{fontSize:12,color:"var(--text3)",marginTop:3}}>Thống kê tổng hợp theo ngày, tháng, năm và nhân viên</div>
+        </div>
       </div>
 
-      {tab === "total" ? (
-        <>
-          <div className="sgrid">
-            <div className="scard cg"><div className="sval">{stats.total}</div><div className="slbl">Tổng cuộc gọi</div></div>
-            <div className="scard cb"><div className="sval">{stats.comp}</div><div className="slbl">Thành công</div></div>
-            <div className="scard cr"><div className="sval">{stats.miss}</div><div className="slbl">Cuộc gọi nhỡ</div></div>
-            <div className="scard cp"><div className="sval">{stats.rate}%</div><div className="slbl">Tỷ lệ kết nối</div></div>
-          </div>
-          <div className="tcard" style={{ marginTop: 20 }}>
-            <div className="thead"><div className="ttitle">Phân tích theo nguồn dữ liệu</div></div>
-            <table>
-              <thead><tr><th>Nguồn</th><th>Số cuộc gọi</th><th>Nhân viên ưu tú</th></tr></thead>
-              <tbody>
-                {SOURCES.map(s => (
-                  <tr key={s}>
-                    <td>{s}</td>
-                    <td className="mono">{Math.floor(Math.random() * 40 + 10)}</td>
-                    <td>{employees[Math.floor(Math.random() * employees.length)].name}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        </>
+      {/* Toolbar */}
+      <div className="rep-toolbar">
+        <div className="mode-toggle">
+          {[["day","Ngày"],["month","Tháng"],["year","Năm"]].map(([k,l])=>(
+            <button key={k} className={`mode-btn ${mode===k?"on":""}`} onClick={()=>setMode(k)}>{l}</button>
+          ))}
+        </div>
+        <input type="date" className="dinp" value={from} onChange={e=>setFrom(e.target.value)} />
+        <span style={{color:"var(--text3)"}}>→</span>
+        <input type="date" className="dinp" value={to} onChange={e=>setTo(e.target.value)} />
+        <div className="qbtns">
+          {[["today","Hôm nay"],["7d","7 ngày"],["month","Tháng này"],["year","Năm nay"]].map(([k,l])=>(
+            <button key={k} className="qb" onClick={()=>setQuick(k)}>{l}</button>
+          ))}
+        </div>
+        <select className="sel2" value={filterUser} onChange={e=>setFilterUser(e.target.value)} style={{minWidth:140}}>
+          <option value="all">Tất cả nhân viên</option>
+          {report?.employees?.map(e=><option key={e.id} value={e.id}>{e.name}</option>)}
+        </select>
+      </div>
+
+      {/* Summary Cards */}
+      <div className="sgrid">
+        <div className="scard cg"><div className="sic" style={{fontSize:19}}>📞</div><div className="sval">{loading?"...":summary.total}</div><div className="slbl">Tổng cuộc gọi</div></div>
+        <div className="scard cb"><div className="sic" style={{fontSize:19}}>✅</div><div className="sval" style={{color:"var(--accent)"}}>{loading?"...":summary.closed}</div><div className="slbl">Chốt thành công</div></div>
+        <div className="scard cr"><div className="sic" style={{fontSize:19}}>📵</div><div className="sval" style={{color:"var(--danger)"}}>{loading?"...":summary.missed}</div><div className="slbl">Cuộc gọi nhỡ</div></div>
+        <div className="scard cp"><div className="sic" style={{fontSize:19}}>📈</div><div className="sval" style={{color:"var(--purple)"}}>{loading?"...":summary.rate}%</div><div className="slbl">Tỷ lệ chốt</div></div>
+      </div>
+
+      {/* Pivot Table */}
+      {loading ? (
+        <div className="nodata" style={{padding:40}}>
+          <div style={{fontSize:20,marginBottom:8}}>⏳</div>
+          Đang tải dữ liệu báo cáo...
+        </div>
+      ) : !report || report.periods.length === 0 ? (
+        <div className="nodata" style={{padding:40}}>
+          <div style={{fontSize:20,marginBottom:8}}>📭</div>
+          Không có dữ liệu trong khoảng thời gian đã chọn
+        </div>
       ) : (
-        <div className="disp-layout">
-          <div className="panel">
-            <div className="panel-head"><div className="panel-title">Danh sách nhân viên</div></div>
-            <div style={{maxHeight: 500, overflowY: "auto"}}>
-              {empStats.map(s => (
-                <div key={s.emp.id} className={`pfg ${selId === s.emp.id ? "act" : ""}`}
-                  style={{ cursor: "pointer", background: selId === s.emp.id ? "rgba(34,211,160,0.06)" : "" }}
-                  onClick={() => setSelId(s.emp.id)}>
-                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-                    <div style={{ fontSize: 13, fontWeight: 700 }}>{s.emp.name}</div>
-                    <div className="mono" style={{ fontSize: 11 }}>{s.comp}/{s.total}</div>
-                  </div>
+        <div className="rep-pivot-wrap">
+          <table className="rep-table">
+            <thead>
+              <tr>
+                <th className="sticky">Nhân viên</th>
+                {report.periods.map(p => <th key={p}>{periodLabel(p)}</th>)}
+                <th style={{background:"rgba(34,211,160,.12)",color:"var(--accent)"}}>TỔNG</th>
+              </tr>
+            </thead>
+            <tbody>
+              {visibleEmps.map(emp => {
+                const empData = report.data[emp.id] || {};
+                const empTotal = Object.values(empData).reduce((a,v)=>({tc:a.tc+v.totalCalls,cl:a.cl+v.closed,ms:a.ms+v.missed}),{tc:0,cl:0,ms:0});
+                return (
+                  <tr key={emp.id}>
+                    <td className="sticky">
+                      <div style={{display:"flex",alignItems:"center",gap:8}}>
+                        <div className="av" style={{width:26,height:26,fontSize:10}}>{emp.name.split(" ").pop().charAt(0)}</div>
+                        {emp.name}
+                      </div>
+                    </td>
+                    {report.periods.map(p => {
+                      const cell = empData[p];
+                      if (!cell) return <td key={p} style={{color:"var(--text3)",opacity:.4}}>—</td>;
+                      const hasNotes = cell.notes && cell.notes.length > 0;
+                      return (
+                        <td key={p}
+                          style={{cursor:"pointer",position:"relative"}}
+                          onClick={()=>setDetailModal({empName:emp.name,period:p,cell})}
+                        >
+                          <div style={{fontWeight:800,fontSize:14}}>{cell.totalCalls}</div>
+                          <div style={{fontSize:10,display:"flex",justifyContent:"center",gap:6,marginTop:2}}>
+                            {cell.closed>0&&<span className="rep-cell-good">✓{cell.closed}</span>}
+                            {cell.missed>0&&<span className="rep-cell-bad">✗{cell.missed}</span>}
+                            {cell.callback>0&&<span className="rep-cell-warn">↩{cell.callback}</span>}
+                          </div>
+                          {hasNotes&&<div style={{position:"absolute",top:3,right:5,fontSize:9,opacity:.6}}>📝</div>}
+                        </td>
+                      );
+                    })}
+                    <td style={{fontWeight:800,background:"rgba(34,211,160,.05)"}}>
+                      <div>{empTotal.tc}</div>
+                      <div style={{fontSize:10,display:"flex",justifyContent:"center",gap:6,marginTop:2}}>
+                        {empTotal.cl>0&&<span className="rep-cell-good">✓{empTotal.cl}</span>}
+                        {empTotal.ms>0&&<span className="rep-cell-bad">✗{empTotal.ms}</span>}
+                      </div>
+                    </td>
+                  </tr>
+                );
+              })}
+              {/* Totals Row */}
+              <tr className="total-row">
+                <td className="sticky" style={{fontWeight:800}}>🏢 TỔNG CỘNG</td>
+                {report.periods.map(p => {
+                  const t = report.totals[p] || {};
+                  return (
+                    <td key={p}
+                      style={{cursor:"pointer"}}
+                      onClick={()=>setDetailModal({empName:"TỔNG CỘNG",period:p,cell:t})}
+                    >
+                      <div style={{fontWeight:800,fontSize:14}}>{t.totalCalls||0}</div>
+                      <div style={{fontSize:10,display:"flex",justifyContent:"center",gap:6,marginTop:2}}>
+                        {(t.closed||0)>0&&<span className="rep-cell-good">✓{t.closed}</span>}
+                        {(t.missed||0)>0&&<span className="rep-cell-bad">✗{t.missed}</span>}
+                      </div>
+                    </td>
+                  );
+                })}
+                <td style={{fontWeight:900,fontSize:16,background:"rgba(34,211,160,.1)"}}>{summary.total}</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      )}
+
+      {/* Detail Modal */}
+      {detailModal && (
+        <div className="mov" onClick={e=>e.target.className==="mov"&&setDetailModal(null)}>
+          <div className="modal md">
+            <div className="mhead">
+              <div className="mav">📋</div>
+              <div>
+                <div style={{fontSize:16,fontWeight:800}}>Chi tiết: {detailModal.empName}</div>
+                <div style={{fontSize:12,color:"var(--text2)"}}>
+                  {mode==="day"?detailModal.period.split("-").reverse().join("/"):detailModal.period}
+                  {" • "}{detailModal.cell.totalCalls} cuộc gọi
                 </div>
-              ))}
-            </div>
-          </div>
-          <div className="panel">
-            <div className="panel-head"><div className="panel-title">Chi tiết: {selId ? employees.find(e => e.id === selId)?.name : "Chọn nhân viên"}</div></div>
-            {!selId ? <div className="nodata">Vui lòng chọn nhân viên ở bên trái</div> : (
-              <div style={{ maxHeight: 500, overflowY: "auto" }}>
-                <table>
-                  <thead><tr><th>Hồ sơ KH</th><th>Ngày nhận</th><th>Độ dài</th><th>Trạng thái</th></tr></thead>
-                  <tbody>
-                    {selCalls.map(c => (
-                      <tr key={c.id}>
-                        <td className="mono" style={{ fontWeight: 700 }}>{c.phone}</td>
-                        <td><div style={{ fontSize: 11 }}>{c.date}</div><div style={{ fontSize: 10, color: "var(--text3)" }}>{c.time}</div></td>
-                        <td className="mono">{c.duration}</td>
-                        <td><span style={{ color: c.status === "completed" ? "var(--accent)" : "var(--danger)" }}>{c.status === "completed" ? "✓" : "✗"}</span></td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
               </div>
-            )}
+              <button className="mcls" onClick={()=>setDetailModal(null)}>×</button>
+            </div>
+            <div className="mbody">
+              {/* Stats mini */}
+              <div style={{display:"grid",gridTemplateColumns:"repeat(4,1fr)",gap:8,marginBottom:16}}>
+                <div className="pbox"><div className="pnum">{detailModal.cell.totalCalls}</div><div className="plbl">Tổng</div></div>
+                <div className="pbox"><div className="pnum" style={{color:"var(--accent)"}}>{detailModal.cell.closed}</div><div className="plbl">Chốt</div></div>
+                <div className="pbox"><div className="pnum" style={{color:"var(--danger)"}}>{detailModal.cell.missed}</div><div className="plbl">Nhỡ</div></div>
+                <div className="pbox"><div className="pnum" style={{color:"var(--text2)"}}>{fmtDur(detailModal.cell.totalDuration||0)}</div><div className="plbl">Tổng TL</div></div>
+              </div>
+
+              {/* Notes list */}
+              {detailModal.cell.notes && detailModal.cell.notes.length > 0 ? (
+                <>
+                  <div style={{fontSize:13,fontWeight:700,marginBottom:10}}>📝 Danh sách ghi chú ({detailModal.cell.notes.length})</div>
+                  <div style={{display:"flex",flexDirection:"column",gap:8}}>
+                    {detailModal.cell.notes.map((n,i) => (
+                      <div key={i} className="icard">
+                        <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:6}}>
+                          <div style={{display:"flex",alignItems:"center",gap:8}}>
+                            <span style={{fontFamily:"var(--mono)",fontWeight:700,fontSize:13}}>{n.phone}</span>
+                            {n.name && <span style={{fontSize:12,color:"var(--text2)"}}>({n.name})</span>}
+                            {n.empName && <span style={{fontSize:11,color:"var(--accent2)"}}>• {n.empName}</span>}
+                          </div>
+                          <span style={{fontSize:11,fontWeight:700,color:RESULT_COLOR[n.result]||"var(--text3)"}}>{RESULT_LABEL[n.result]||n.result}</span>
+                        </div>
+                        <div style={{display:"flex",gap:12,fontSize:11,color:"var(--text3)",marginBottom:6}}>
+                          <span>🕐 {new Date(n.calledAt).toLocaleTimeString("vi-VN",{hour:"2-digit",minute:"2-digit"})}</span>
+                          {n.duration>0&&<span>⏱ {fmtDur(n.duration)}</span>}
+                        </div>
+                        <div style={{fontSize:13,color:"var(--text)",background:"var(--surface)",padding:"8px 10px",borderRadius:6,lineHeight:1.6}}>{n.notes}</div>
+                      </div>
+                    ))}
+                  </div>
+                </>
+              ) : (
+                <div className="nodata" style={{padding:20}}>
+                  <div style={{fontSize:16,marginBottom:6}}>📭</div>
+                  Không có ghi chú nào trong khoảng thời gian này
+                </div>
+              )}
+            </div>
           </div>
         </div>
       )}
@@ -2065,7 +2219,7 @@ export default function App() {
             
             {!can("manageAccounts") && page === "accounts" ? <AccessDenied requiredRole="admin" /> : page === "accounts" && <AccountsPage accounts={accounts} employees={employees} />}
             {!can("manageAccounts") && page === "permissions" ? <AccessDenied requiredRole="admin" /> : page === "permissions" && <PermMatrixPage permissions={permissions} onUpdate={setPermissions} />}
-            {!can("viewReports") && page === "reports" ? <AccessDenied requiredRole="manager" /> : page === "reports" && <ReportsPage calls={calls} employees={employees} />}
+            {!can("viewReports") && page === "reports" ? <AccessDenied requiredRole="manager" /> : page === "reports" && <ReportsPage />}
             
           </main>
         </div>
