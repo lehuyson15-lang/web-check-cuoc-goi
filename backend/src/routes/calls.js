@@ -102,11 +102,12 @@ router.post('/manual', authMiddleware, upload.single('audio'), async (req, res) 
 // List calls
 router.get('/', authMiddleware, async (req, res) => {
   try {
-    const { page = 1, limit = 25, search, status } = req.query;
+    const { page = 1, limit = 25, search, status, userId } = req.query;
     const skip = (page - 1) * limit;
 
     const where = {
       ...(req.user.role !== 'ADMIN' ? { userId: req.user.userId } : {}),
+      ...(userId && req.user.role === 'ADMIN' ? { userId } : {}),
       ...(status ? { transcriptStatus: status } : {}),
       ...(search ? {
         OR: [

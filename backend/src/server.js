@@ -28,6 +28,7 @@ const webhookRoutes = require('./routes/webhooks');
 const leadRoutes = require('./routes/leads');
 const notificationRoutes = require('./routes/notifications');
 const { startSlaChecker } = require('./cron/slaChecker');
+const { startLarkReporter } = require('./cron/larkReporter');
 
 app.use('/api/auth', authRoutes);
 app.use('/api/calls', callRoutes);
@@ -38,6 +39,7 @@ app.use('/api/notifications', notificationRoutes);
 
 // Start background job
 startSlaChecker();
+startLarkReporter();
 
 // Handle SPA routing
 app.use((req, res) => {

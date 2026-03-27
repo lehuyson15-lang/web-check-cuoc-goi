@@ -1391,17 +1391,30 @@ const MyCallsPage = ({ account, calls, openTr, setOpenTr, transcripts, setEditCa
 };
 
 const AllCallsPage = ({ calls, employees, openTr, setOpenTr, transcripts, onAdd, setEditCall, can, onDeleteCall }) => {
+  const [filterEmpId, setFilterEmpId] = useState("all");
+
+  const filteredCalls = useMemo(() => {
+    if (filterEmpId === "all") return calls;
+    return calls.filter(c => c.empId === filterEmpId);
+  }, [calls, filterEmpId]);
+
   return (
     <div className="content">
-      <div className="sec-title">
-        <span>🌍 Tất cả cuộc gọi</span>
-        <button className="lbtn" style={{width:"auto", padding:"6px 12px", fontSize:12}} onClick={onAdd}>+ Thêm cuộc gọi</button>
+      <div className="sec-title" style={{display:"flex",justifyContent:"space-between",alignItems:"center",flexWrap:"wrap",gap:10}}>
+        <span>🌍 Tất cả cuộc gọi ({filteredCalls.length})</span>
+        <div style={{display:"flex",gap:8,alignItems:"center"}}>
+          <select className="sel2" value={filterEmpId} onChange={e=>setFilterEmpId(e.target.value)} style={{minWidth:160,padding:"6px 10px",fontSize:12}}>
+            <option value="all">👥 Tất cả nhân viên</option>
+            {employees.map(e=><option key={e.id} value={e.id}>{e.name}</option>)}
+          </select>
+          <button className="lbtn" style={{width:"auto", padding:"6px 12px", fontSize:12}} onClick={onAdd}>+ Thêm cuộc gọi</button>
+        </div>
       </div>
       <div className="tcard">
         <table>
           <thead><tr><th>SĐT</th><th>Nhân viên</th><th>Ngày / Giờ</th><th>Kết thúc</th><th>Thời gian</th><th>Ghi chú</th><th>Transcript</th></tr></thead>
           <tbody>
-            {calls.map(c => {
+            {filteredCalls.map(c => {
               const emp = employees.find(e => e.id === c.empId);
               return (
                 <React.Fragment key={c.id}>

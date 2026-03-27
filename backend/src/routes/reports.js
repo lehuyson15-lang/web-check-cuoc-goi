@@ -156,4 +156,17 @@ router.get('/call-report', authMiddleware, async (req, res) => {
   }
 });
 
+// Manual trigger for Lark Report (Admin only)
+router.post('/send-lark', authMiddleware, adminMiddleware, async (req, res) => {
+  try {
+    const { type } = req.body; // 'daily', 'weekly', 'monthly'
+    const { sendTestReport } = require('../cron/larkReporter');
+    await sendTestReport(type);
+    res.json({ message: `Đã gửi lệnh báo cáo ${type} qua Lark thành công.` });
+  } catch (error) {
+    console.error('[Send Lark API] Error:', error);
+    res.status(500).json({ message: 'Internal server error', error: error.message });
+  }
+});
+
 module.exports = router;
