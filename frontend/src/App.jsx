@@ -1196,8 +1196,8 @@ const MyKPIPage = ({ account, calls, employees, assignments }) => {
 // ─────────────────────────────────────────────────────────────────────────────
 
 const DashPage = ({ allCalls }) => {
-  const [from, setFrom] = useState("2025-03-01");
-  const [to,   setTo]   = useState("2025-03-21");
+  const [from, setFrom] = useState(() => { const d = new Date(); d.setDate(1); return d.toISOString().slice(0,10); });
+  const [to,   setTo]   = useState(() => new Date().toISOString().slice(0,10));
   const [sKey, setSKey] = useState("completed");
   const [sDir, setSDir] = useState(-1);
 
@@ -1249,7 +1249,7 @@ const DashPage = ({ allCalls }) => {
         <div className="scard cg"><div className="sic">📞</div><div className="sval" style={{color:"var(--accent)"}}>{total}</div><div className="slbl">Tổng cuộc gọi (kỳ lọc)</div></div>
         <div className="scard cb"><div className="sic">✅</div><div className="sval" style={{color:"var(--accent2)"}}>{comp}</div><div className="slbl">Đã nghe</div><div className="schg up" style={{color:"var(--accent)",fontSize:11,marginTop:4}}>{total?((comp/total)*100).toFixed(1):0}% tỷ lệ nghe máy</div></div>
         <div className="scard cy"><div className="sic">⏱</div><div className="sval" style={{color:"var(--warn)"}}>{Math.floor(avgs/60)}:{String(avgs%60).padStart(2,"0")}</div><div className="slbl">Thời lượng TB toàn đội</div></div>
-        <div className="scard cr"><div className="sic">📵</div><div className="sval" style={{color:"var(--danger)"}}>{miss}</div><div className="slbl">Tổng gọi nhỡ</div><div className="schg down" style={{color:"var(--danger)",fontSize:11,marginTop:4}}>{total?((miss/total)*100).toFixed(1):0}% miss rate</div></div>
+        <div className="scard cr"><div className="sic">📵</div><div className="sval" style={{color:"var(--danger)"}}>{miss}</div><div className="slbl">Tổng gọi nhỡ</div><div className="schg down" style={{color:"var(--danger)",fontSize:11,marginTop:4}}>{total?((miss/total)*100).toFixed(1):0}% tỷ lệ nhỡ</div></div>
       </div>
 
       <DRBar from={from} to={to} onF={setFrom} onT={setTo} count={fc.length} />
@@ -1269,10 +1269,10 @@ const DashPage = ({ allCalls }) => {
             <div>Nhân viên</div>
             <div onClick={()=>tog("completed")}>Đã nghe {arr("completed")}</div>
             <div onClick={()=>tog("missed")}>Nhỡ {arr("missed")}</div>
-            <div onClick={()=>tog("missRate")}>Miss% {arr("missRate")}</div>
-            <div onClick={()=>tog("avgDurSec")}>TG TB {arr("avgDurSec")}</div>
-            <div onClick={()=>tog("converted")}>Conv. {arr("converted")}</div>
-            <div onClick={()=>tog("convRate")}>Conv.% {arr("convRate")}</div>
+            <div onClick={()=>tog("missRate")}>Tỷ lệ nhỡ {arr("missRate")}</div>
+            <div onClick={()=>tog("avgDurSec")}>TG trung bình {arr("avgDurSec")}</div>
+            <div onClick={()=>tog("converted")}>Chuyển đổi {arr("converted")}</div>
+            <div onClick={()=>tog("convRate")}>Tỷ lệ CĐ {arr("convRate")}</div>
           </div>
           {sorted.map(({emp,kpi},i) => (
             <div className="rrow" key={emp.id}>
@@ -1510,7 +1510,6 @@ const EmpPage = ({ employees, allCalls, onSel, onAdd }) => {
           <thead>
             <tr>
               <th>Nhân viên</th>
-              <th>ID</th>
               <th>Phòng ban</th>
               <th>SĐT Nội bộ</th>
               <th>Trạng thái</th>
@@ -1521,7 +1520,6 @@ const EmpPage = ({ employees, allCalls, onSel, onAdd }) => {
             {employees.map(e => (
               <tr key={e.id}>
                 <td><div className="ecell"><div className="av">{e.avatar}</div>{e.name}</div></td>
-                <td className="mono">{e.id}</td>
                 <td>{e.dept}</td>
                 <td className="mono">{e.phone}</td>
                 <td><span className={`tag ${e.status==="online"?"tg":e.status==="busy"?"ty":"tb"}`}>{STATUS_LABEL[e.status]}</span></td>
@@ -2124,19 +2122,16 @@ export default function App() {
           <div className="lbox">
             <div className="lcard">
               <div className="llogoic">📞</div>
-              <h2 style={{fontSize:22,fontWeight:800,marginBottom:20}}>ĐĂNG NHẬP HỆ THỐNG</h2>
-              <p style={{fontSize:11,color:"var(--text3)",marginBottom:15}}>Vui lòng dùng tài khoản Clinic để đồng bộ dữ liệu thực.</p>
+              <h2 style={{fontSize:22,fontWeight:800,marginBottom:6}}>CallManager Pro</h2>
+              <p style={{fontSize:12,color:"var(--text3)",marginBottom:20}}>Đăng nhập để quản lý cuộc gọi và hiệu suất</p>
               {error && <div className="lerr">{error}</div>}
               <form onSubmit={handleLogin}>
                 <div className="fg"><input className="linp" placeholder="Email đăng nhập" value={loginForm.username} onChange={e=>setLoginForm({...loginForm,username:e.target.value})} autoFocus /></div>
                 <div className="fg"><input className="linp" type="password" placeholder="Mật khẩu" value={loginForm.password} onChange={e=>setLoginForm({...loginForm,password:e.target.value})} /></div>
                 <button className="lbtn" type="submit">ĐĂNG NHẬP</button>
               </form>
-              <div style={{marginTop:20,fontSize:12,color:"var(--text3)"}}>
-                <p style={{marginBottom:8}}>Tài khoản Hệ Thống (Real-time):</p>
-                <div className="demo-item" onClick={() => setLoginForm({username:"admin@clinic.com",password:"123"})}>👑 Quản trị viên: admin@clinic.com / mật khẩu 123</div>
-                <div className="demo-item" onClick={() => setLoginForm({username:"staff@clinic.com",password:"password123"})}>👤 Nhân viên: staff@clinic.com / password123</div>
-                <button onClick={handleReset} style={{marginTop:20,background:"none",border:"none",color:"var(--accent)",fontSize:11,textDecoration:"underline",cursor:"pointer",display:"block",margin:"20px auto 0"}}>⚠️ Reset Hệ thống (Xóa lỗi cache)</button>
+              <div style={{marginTop:16,textAlign:"center"}}>
+                <button onClick={handleReset} style={{background:"none",border:"none",color:"var(--text3)",fontSize:11,cursor:"pointer"}}>Gặp sự cố? Nhấn để đặt lại</button>
               </div>
             </div>
           </div>
@@ -2148,7 +2143,7 @@ export default function App() {
     const can = (perm) => permissions[perm]?.includes(role);
 
     const NAV = [
-      { id: "dashboard", lb: "Dashboard", ic: "📊", show: can("viewDashboard") },
+      { id: "dashboard", lb: "Bảng điều khiển", ic: "📊", show: can("viewDashboard") },
       { id: "my_kpi", lb: "KPI Của tôi", ic: "🎯", show: role === "employee" },
       { id: "my_tasks", lb: "Nhiệm vụ", ic: "📋", show: role === "employee" },
       { id: "my_calls", lb: "Cuộc gọi của tôi", ic: "📞", show: role === "employee" },
@@ -2171,7 +2166,7 @@ export default function App() {
                 <div className="sblogoic">📞</div>
                 <div>
                   <div style={{fontSize:13,fontWeight:800}}>CallManager Pro</div>
-                  <div style={{fontSize:10,color:"var(--text3)"}}>KTTHĐN Dashboard</div>
+                  <div style={{fontSize:10,color:"var(--text3)"}}>Quản lý cuộc gọi</div>
                 </div>
               </div>
             </div>
@@ -2206,18 +2201,19 @@ export default function App() {
                   className="btn btnp" 
                   style={{ background: "#4ade80", color: "#000" }}
                   onClick={() => {
-                    const phone = prompt("CÔNG CỤ TEST GIAO LEAD (SLA) - Nhập SĐT khách:", "09");
+                    const phone = prompt("Nhập số điện thoại khách hàng:", "09");
                     if (!phone) return;
-                    const name = prompt("Tên khách:", "Khách VVIP");
-                    const emp = prompt(`Bấm Chọn ID NV (SLA cảnh báo chuyển xuống nhân viên này):\n${accounts.filter(a=>a.role==='employee').map(a => a.name + ' = ' + a.id).join('\\n')}`, "acc_nv001");
+                    const name = prompt("Nhập tên khách hàng:", "");
+                    const empList = accounts.filter(a=>a.role==='employee').map(a => a.name + ' = ' + a.id).join('\n');
+                    const emp = prompt(`Chọn nhân viên phụ trách:\n${empList}`, "");
                     if (!emp) return;
-                    const sla = prompt("SLA - Bạn muốn báo động trễ sau bao nhiêu phút chưa gọi?", "1");
+                    const sla = prompt("Thời gian tối đa phải gọi (phút):", "5");
                     
                     api.post('/leads', { customerPhone: phone, customerName: name, assignedToId: emp, slaMinutes: parseFloat(sla||1) })
                       .then(() => alert(`✅ Đã giao SĐT ${phone} cho ${emp}!\nHệ thống sẽ tự động quét và báo chuông "Quá Hạn" nếu NV chưa gọi sau ${sla} phút.`))
                       .catch(e => alert("Lỗi: " + JSON.stringify(e)));
                   }}
-                >🚀 Giao SĐT (Có SLA Cron)</button>
+                >📋 Giao số điện thoại</button>
               )}
               <NotificationBell />
             </div>
