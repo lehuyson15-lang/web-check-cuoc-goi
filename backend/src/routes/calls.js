@@ -112,7 +112,8 @@ router.get('/', authMiddleware, async (req, res) => {
       ...(search ? {
         OR: [
           { customerPhone: { contains: search } },
-          { notes: { contains: search } },
+          { customerName: { contains: search, mode: 'insensitive' } },
+          { notes: { contains: search, mode: 'insensitive' } },
           { segments: { some: { text: { contains: search, mode: 'insensitive' } } } }
         ]
       } : {})
@@ -196,6 +197,104 @@ router.delete('/:id', authMiddleware, async (req, res) => {
   } catch (error) {
     console.error('[Delete Call] Error:', error);
     res.status(500).json({ message: 'Internal server error', error: error.message });
+  }
+});
+
+// Import CSV/Excel data
+const csvUpload = multer({ 
+  storage: multer.memoryStorage(),
+  limits: { fileSize: 10 * 1024 * 1024 }, // 10MB
+  fileFilter: (req, file, cb) => {
+    const allowed = ['.csv', '.txt', '.xlsx', '.xls'];
+    const ext = path.extname(file.originalname).toLowerCase();
+    if (allowed.includes(ext)) cb(null, true);
+    else cb(new Error('Chỉ chấp nhận file CSV hoặc Excel'), false);
+  }
+});
+
+router.post('/import-csv', authMiddleware, csvUpload.single('file'), async (req, res) => {
+  try {
+    if (req.user.role !== 'ADMIN') {
+      return res.status(403).json({ message: 'Chỉ Admin mới được import dữ liệu' });
+    }
+    if (!req.file) {
+      return res.status(400).json({ message: 'Vui lòng chọn file CSV để tải lên' });
+    }
+
+    const content = req.file.buffer.toString('utf-8');
+    const lines = content.split(/\r?\n/).filter(l => l.trim());
+
+    if (lines.length < 2) {
+      return res.status(400).json({ message: 'File rỗng hoặc không có dữ liệu' });
+    }
+
+    // Parse header
+    const header = lines[0].split(',').map(h => h.trim().toLowerCase().replace(/[\"]/g, ''));
+    const phoneIdx = header.findIndex(h => h.includes('sdt') || h.includes('sđt') || h.includes('phone') || h.includes('số') || h.includes('dien thoai') || h.includes('điện thoại'));
+    const nameIdx = header.findIndex(h => h.includes('ten') || h.includes('tên') || h.includes('name') || h.includes('khách') || h.includes('khach'));
+    const noteIdx = header.findIndex(h => h.includes('ghi') || h.includes('note') || h.includes('chu'));
+    const resultIdx = header.findIndex(h => h.includes('ket qua') || h.includes('kết quả') || h.includes('result') || h.includes('trang thai') || h.includes('trạng thái'));
+
+    if (phoneIdx === -1) {
+      return res.status(400).json({ 
+        message: 'Không tìm thấy cột SĐT. Cần có cột chứa: SĐT, Phone, Số điện thoại',
+        headers: header 
+      });
+    }
+
+    // Get default user (admin who uploads)
+    const defaultUserId = req.user.userId;
+
+    const results = { success: 0, skipped: 0, errors: [] };
+    const data = [];
+
+    for (let i = 1; i < lines.length; i++) {
+      // Simple CSV parse (handles quoted fields)
+      const cols = lines[i].match(/("[^"]*"|[^,]*)/g)?.map(c => c.replace(/^"|"$/g, '').trim()) || [];
+      const phone = cols[phoneIdx]?.replace(/[^0-9+]/g, '');
+
+      if (!phone || phone.length < 8) {
+        results.skipped++;
+        continue;
+      }
+
+      const name = nameIdx >= 0 ? cols[nameIdx] : null;
+      const note = noteIdx >= 0 ? cols[noteIdx] : null;
+      let result = 'PENDING';
+      if (resultIdx >= 0) {
+        const rv = (cols[resultIdx] || '').toLowerCase();
+        if (rv.includes('chốt') || rv.includes('closed') || rv.includes('thành công')) result = 'CLOSED';
+        else if (rv.includes('nhỡ') || rv.includes('no_answer') || rv.includes('không nghe')) result = 'NO_ANSWER';
+        else if (rv.includes('callback') || rv.includes('gọi lại')) result = 'CALLBACK';
+      }
+
+      data.push({
+        userId: defaultUserId,
+        customerPhone: phone,
+        customerName: name || null,
+        direction: 'OUTBOUND',
+        source: 'MANUAL',
+        durationSeconds: 0,
+        calledAt: new Date(),
+        result,
+        notes: note || null,
+        transcriptStatus: 'PENDING'
+      });
+    }
+
+    // Bulk create
+    if (data.length > 0) {
+      const created = await prisma.call.createMany({ data });
+      results.success = created.count;
+    }
+
+    res.json({
+      message: `Import thành công ${results.success} khách hàng, bỏ qua ${results.skipped} dòng`,
+      ...results
+    });
+  } catch (error) {
+    console.error('[Import CSV] Error:', error);
+    res.status(500).json({ message: 'Lỗi khi import: ' + error.message });
   }
 });
 

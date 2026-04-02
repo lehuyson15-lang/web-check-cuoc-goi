@@ -1392,27 +1392,83 @@ const MyCallsPage = ({ account, calls, openTr, setOpenTr, transcripts, setEditCa
 
 const AllCallsPage = ({ calls, employees, openTr, setOpenTr, transcripts, onAdd, setEditCall, can, onDeleteCall }) => {
   const [filterEmpId, setFilterEmpId] = useState("all");
+  const [searchText, setSearchText] = useState("");
+  const [importing, setImporting] = useState(false);
+  const [importMsg, setImportMsg] = useState(null);
+  const fileInputRef = useRef(null);
 
   const filteredCalls = useMemo(() => {
-    if (filterEmpId === "all") return calls;
-    return calls.filter(c => c.empId === filterEmpId);
-  }, [calls, filterEmpId]);
+    let result = calls;
+    if (filterEmpId !== "all") result = result.filter(c => c.empId === filterEmpId);
+    if (searchText.trim()) {
+      const q = searchText.trim().toLowerCase();
+      result = result.filter(c =>
+        (c.phone && c.phone.toLowerCase().includes(q)) ||
+        (c.customerName && c.customerName.toLowerCase().includes(q)) ||
+        (c.notes && c.notes.toLowerCase().includes(q))
+      );
+    }
+    return result;
+  }, [calls, filterEmpId, searchText]);
+
+  const handleImportCSV = async (e) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    setImporting(true);
+    setImportMsg(null);
+    try {
+      const formData = new FormData();
+      formData.append("file", file);
+      const res = await api.post("/calls/import-csv", formData, {
+        headers: { "Content-Type": "multipart/form-data" }
+      });
+      setImportMsg({ type: "ok", text: res.data.message });
+      setTimeout(() => window.location.reload(), 2000);
+    } catch (err) {
+      setImportMsg({ type: "err", text: err.response?.data?.message || "Lỗi khi tải lên" });
+    } finally {
+      setImporting(false);
+      e.target.value = "";
+    }
+  };
 
   return (
     <div className="content">
       <div className="sec-title" style={{display:"flex",justifyContent:"space-between",alignItems:"center",flexWrap:"wrap",gap:10}}>
         <span>🌍 Tất cả cuộc gọi ({filteredCalls.length})</span>
-        <div style={{display:"flex",gap:8,alignItems:"center"}}>
+        <div style={{display:"flex",gap:8,alignItems:"center",flexWrap:"wrap"}}>
           <select className="sel2" value={filterEmpId} onChange={e=>setFilterEmpId(e.target.value)} style={{minWidth:160,padding:"6px 10px",fontSize:12}}>
             <option value="all">👥 Tất cả nhân viên</option>
             {employees.map(e=><option key={e.id} value={e.id}>{e.name}</option>)}
           </select>
           <button className="lbtn" style={{width:"auto", padding:"6px 12px", fontSize:12}} onClick={onAdd}>+ Thêm cuộc gọi</button>
+          <input type="file" ref={fileInputRef} accept=".csv,.txt,.xlsx,.xls" style={{display:"none"}} onChange={handleImportCSV} />
+          <button className="lbtn" style={{width:"auto", padding:"6px 12px", fontSize:12, background:"var(--accent2)"}} onClick={() => fileInputRef.current?.click()} disabled={importing}>
+            {importing ? "⏳ Đang tải..." : "📁 Tải file khách hàng"}
+          </button>
         </div>
+      </div>
+
+      {importMsg && (
+        <div style={{padding:"10px 14px",marginBottom:12,borderRadius:8,fontSize:13,fontWeight:600,
+          background:importMsg.type==="ok"?"rgba(34,211,160,.15)":"rgba(255,77,77,.15)",
+          color:importMsg.type==="ok"?"var(--accent)":"var(--danger)"}}>
+          {importMsg.type==="ok"?"✅":"❌"} {importMsg.text}
+        </div>
+      )}
+
+      <div style={{marginBottom:12}}>
+        <input
+          type="text"
+          placeholder="🔍 Tìm theo tên hoặc số điện thoại khách hàng..."
+          value={searchText}
+          onChange={e => setSearchText(e.target.value)}
+          style={{width:"100%",padding:"10px 14px",borderRadius:8,border:"1px solid var(--border)",background:"var(--surface)",color:"var(--text)",fontSize:13,outline:"none"}}
+        />
       </div>
       <div className="tcard">
         <table>
-          <thead><tr><th>SĐT</th><th>Nhân viên</th><th>Ngày / Giờ</th><th>Kết thúc</th><th>Thời gian</th><th>Ghi chú</th><th>Transcript</th></tr></thead>
+          <thead><tr><th>SĐT</th><th>Tên khách</th><th>Nhân viên</th><th>Ngày / Giờ</th><th>Thời gian</th><th>Ghi chú</th><th>Hành động</th></tr></thead>
           <tbody>
             {filteredCalls.map(c => {
               const emp = employees.find(e => e.id === c.empId);
@@ -1420,9 +1476,9 @@ const AllCallsPage = ({ calls, employees, openTr, setOpenTr, transcripts, onAdd,
                 <React.Fragment key={c.id}>
                   <tr>
                     <td className="cph">{c.phone}</td>
+                    <td style={{fontSize:12}}>{c.customerName || <span style={{color:"var(--text3)",fontStyle:"italic"}}>—</span>}</td>
                     <td>{emp ? emp.name : "—"}</td>
                     <td>{c.date} {c.time}</td>
-                    <td className="mono" style={{color:"var(--text3)"}}>{c.endTime || "—"}</td>
                     <td className="mono">{c.duration}</td>
                     <td>
                       <p className="text-xs text-slate-500 max-w-[150px] truncate" title={c.notes}>
