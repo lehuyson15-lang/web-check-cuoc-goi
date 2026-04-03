@@ -1639,6 +1639,7 @@ const ReportsPage = () => {
   const [from, setFrom] = useState(() => { const d = new Date(); d.setDate(d.getDate() - 6); return d.toISOString().slice(0,10); });
   const [to, setTo] = useState(() => new Date().toISOString().slice(0,10));
   const [filterUser, setFilterUser] = useState("all");
+  const [filterDirection, setFilterDirection] = useState("all");
   const [report, setReport] = useState(null);
   const [loading, setLoading] = useState(true);
   const [detailModal, setDetailModal] = useState(null); // { empName, period, notes[] }
@@ -1646,7 +1647,7 @@ const ReportsPage = () => {
   const fetchReport = useCallback(async () => {
     setLoading(true);
     try {
-      const params = new URLSearchParams({ mode, from, to, userId: filterUser });
+      const params = new URLSearchParams({ mode, from, to, userId: filterUser, direction: filterDirection });
       const res = await api.get(`/reports/call-report?${params}`);
       setReport(res.data);
     } catch (err) {
@@ -1654,7 +1655,7 @@ const ReportsPage = () => {
     } finally {
       setLoading(false);
     }
-  }, [mode, from, to, filterUser]);
+  }, [mode, from, to, filterUser, filterDirection]);
 
   useEffect(() => { fetchReport(); }, [fetchReport]);
 
@@ -1706,6 +1707,22 @@ const ReportsPage = () => {
         </div>
       </div>
 
+      {/* Direction Filter */}
+      <div style={{display:"flex",gap:6,marginBottom:14}}>
+        {[["all","📞 Tất cả cuộc gọi"],["INBOUND","📥 Cuộc gọi đến"],["OUTBOUND","📤 Cuộc gọi đi"]].map(([k,l])=>(
+          <button key={k}
+            onClick={()=>setFilterDirection(k)}
+            style={{
+              padding:"8px 16px",borderRadius:8,fontSize:13,fontWeight:700,cursor:"pointer",
+              border:filterDirection===k?"2px solid var(--accent)":"1px solid var(--border)",
+              background:filterDirection===k?"rgba(34,211,160,.12)":"var(--surface)",
+              color:filterDirection===k?"var(--accent)":"var(--text2)",
+              transition:"all .2s ease"
+            }}
+          >{l}</button>
+        ))}
+      </div>
+
       {/* Toolbar */}
       <div className="rep-toolbar">
         <div className="mode-toggle">
@@ -1729,7 +1746,7 @@ const ReportsPage = () => {
 
       {/* Summary Cards */}
       <div className="sgrid">
-        <div className="scard cg"><div className="sic" style={{fontSize:19}}>📞</div><div className="sval">{loading?"...":summary.total}</div><div className="slbl">Tổng cuộc gọi</div></div>
+        <div className="scard cg"><div className="sic" style={{fontSize:19}}>{filterDirection==="INBOUND"?"📥":filterDirection==="OUTBOUND"?"📤":"📞"}</div><div className="sval">{loading?"...":summary.total}</div><div className="slbl">{filterDirection==="INBOUND"?"Cuộc gọi đến":filterDirection==="OUTBOUND"?"Cuộc gọi đi":"Tổng cuộc gọi"}</div></div>
         <div className="scard cb"><div className="sic" style={{fontSize:19}}>✅</div><div className="sval" style={{color:"var(--accent)"}}>{loading?"...":summary.closed}</div><div className="slbl">Chốt thành công</div></div>
         <div className="scard cr"><div className="sic" style={{fontSize:19}}>📵</div><div className="sval" style={{color:"var(--danger)"}}>{loading?"...":summary.missed}</div><div className="slbl">Cuộc gọi nhỡ</div></div>
         <div className="scard cp"><div className="sic" style={{fontSize:19}}>📈</div><div className="sval" style={{color:"var(--purple)"}}>{loading?"...":summary.rate}%</div><div className="slbl">Tỷ lệ chốt</div></div>

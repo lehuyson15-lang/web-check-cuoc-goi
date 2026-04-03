@@ -56,11 +56,14 @@ const sendToLark = async (title, contentLines) => {
 };
 
 // ── Build Report Data ────────────────────────────────────────────────────────
-const buildReport = async (dateFrom, dateTo) => {
+const buildReport = async (dateFrom, dateTo, direction) => {
+  const where = {
+    calledAt: { gte: dateFrom, lte: dateTo },
+    ...(direction ? { direction } : {})
+  };
+
   const calls = await prisma.call.findMany({
-    where: {
-      calledAt: { gte: dateFrom, lte: dateTo }
-    },
+    where,
     include: { user: { select: { id: true, name: true } } }
   });
 
@@ -88,34 +91,50 @@ const buildReport = async (dateFrom, dateTo) => {
   return { total, closed, missed, callback, pending, totalDur, rate, empMap };
 };
 
-// ── Format Report Message ────────────────────────────────────────────────────
-const formatReport = (label, period, data) => {
+// ── Format Report Section ────────────────────────────────────────────────────
+const formatSection = (sectionLabel, data) => {
+  const lines = [];
+  lines.push(`${sectionLabel}`);
+  lines.push(`   📞 Tổng: ${data.total} | ✅ Chốt: ${data.closed} | 📵 Nhỡ: ${data.missed} | ↩️ Gọi lại: ${data.callback} | ⏳ Chờ: ${data.pending}`);
+  lines.push(`   ⏱ Thời lượng: ${fmtDur(data.totalDur)} | 📈 Tỷ lệ chốt: ${data.rate}%`);
+  return lines;
+};
+
+// ── Format Full Report Message ───────────────────────────────────────────────
+const formatReport = (label, period, allData, inData, outData) => {
   const lines = [];
 
   lines.push(`📅 Kỳ báo cáo: ${period}`);
   lines.push('');
-  lines.push(`📞 Tổng cuộc gọi: ${data.total}`);
-  lines.push(`✅ Chốt thành công: ${data.closed}`);
-  lines.push(`📵 Cuộc gọi nhỡ: ${data.missed}`);
-  lines.push(`↩️ Gọi lại: ${data.callback}`);
-  lines.push(`⏳ Chờ xử lý: ${data.pending}`);
-  lines.push(`⏱ Tổng thời lượng: ${fmtDur(data.totalDur)}`);
-  lines.push(`📈 Tỷ lệ chốt: ${data.rate}%`);
-  lines.push('');
-  lines.push('━━━━━━━━━━━━━━━━━━━━━━━');
-  lines.push('👥 THỐNG KÊ TỪNG NHÂN VIÊN');
+
+  // All calls summary
+  lines.push(...formatSection('📞 TỔNG TẤT CẢ CUỘC GỌI', allData));
   lines.push('');
 
-  const empNames = Object.keys(data.empMap).sort();
+  // Inbound summary
+  lines.push(...formatSection('📥 CUỘC GỌI ĐẾN (INBOUND)', inData));
+  lines.push('');
+
+  // Outbound summary
+  lines.push(...formatSection('📤 CUỘC GỌI ĐI (OUTBOUND)', outData));
+  lines.push('');
+
+  lines.push('━━━━━━━━━━━━━━━━━━━━━━━');
+  lines.push('👥 THỐNG KÊ TỪNG NHÂN VIÊN (TỔNG HỢP)');
+  lines.push('');
+
+  const empNames = Object.keys(allData.empMap).sort();
   empNames.forEach(name => {
-    const e = data.empMap[name];
+    const e = allData.empMap[name];
     const eRate = e.total > 0 ? (e.closed / e.total * 100).toFixed(1) : '0.0';
+    // Get inbound/outbound counts for this employee
+    const eIn = inData.empMap[name] || { total: 0 };
+    const eOut = outData.empMap[name] || { total: 0 };
     lines.push(`🧑‍💼 ${name}`);
-    lines.push(`   📞 ${e.total} cuộc | ✅ ${e.closed} chốt | 📵 ${e.missed} nhỡ | 📈 ${eRate}%`);
+    lines.push(`   📞 ${e.total} cuộc (📥${eIn.total} đến | 📤${eOut.total} đi) | ✅ ${e.closed} chốt | 📵 ${e.missed} nhỡ | 📈 ${eRate}%`);
     lines.push(`   ⏱ Thời lượng: ${fmtDur(e.dur)}`);
     if (e.notes.length > 0) {
       lines.push(`   📝 Ghi chú: ${e.notes.length} mục`);
-      // Show max 3 recent notes
       e.notes.slice(-3).forEach(n => {
         const short = n.length > 60 ? n.substring(0, 60) + '...' : n;
         lines.push(`      • ${short}`);
@@ -135,6 +154,15 @@ const formatReport = (label, period, data) => {
 };
 
 // ── Report Generators ────────────────────────────────────────────────────────
+const buildAllReports = async (dateFrom, dateTo) => {
+  const [allData, inData, outData] = await Promise.all([
+    buildReport(dateFrom, dateTo),
+    buildReport(dateFrom, dateTo, 'INBOUND'),
+    buildReport(dateFrom, dateTo, 'OUTBOUND')
+  ]);
+  return { allData, inData, outData };
+};
+
 const sendDailyReport = async () => {
   const vnNow = getVNTime();
   // Yesterday's report
@@ -143,11 +171,11 @@ const sendDailyReport = async () => {
   const dateFrom = new Date(yesterday.getFullYear(), yesterday.getMonth(), yesterday.getDate());
   const dateTo = new Date(yesterday.getFullYear(), yesterday.getMonth(), yesterday.getDate(), 23, 59, 59, 999);
 
-  const data = await buildReport(dateFrom, dateTo);
+  const { allData, inData, outData } = await buildAllReports(dateFrom, dateTo);
   const { title, lines } = formatReport(
     `Báo cáo ngày ${fmtDate(yesterday)}`,
     fmtDate(yesterday),
-    data
+    allData, inData, outData
   );
   return sendToLark(title, lines);
 };
@@ -163,11 +191,11 @@ const sendWeeklyReport = async () => {
   const dateFrom = new Date(lastMonday.getFullYear(), lastMonday.getMonth(), lastMonday.getDate());
   const dateTo = new Date(lastSunday.getFullYear(), lastSunday.getMonth(), lastSunday.getDate(), 23, 59, 59, 999);
 
-  const data = await buildReport(dateFrom, dateTo);
+  const { allData, inData, outData } = await buildAllReports(dateFrom, dateTo);
   const { title, lines } = formatReport(
     `Báo cáo tuần ${fmtDate(lastMonday)} - ${fmtDate(lastSunday)}`,
     `${fmtDate(lastMonday)} → ${fmtDate(lastSunday)}`,
-    data
+    allData, inData, outData
   );
   return sendToLark(title, lines);
 };
@@ -185,11 +213,11 @@ const sendMonthlyReport = async () => {
     'Tháng 7', 'Tháng 8', 'Tháng 9', 'Tháng 10', 'Tháng 11', 'Tháng 12'];
   const monthLabel = months[prevMonth.getMonth() + 1];
 
-  const data = await buildReport(dateFrom, dateTo);
+  const { allData, inData, outData } = await buildAllReports(dateFrom, dateTo);
   const { title, lines } = formatReport(
     `Báo cáo ${monthLabel}/${prevMonth.getFullYear()}`,
     `${fmtDate(dateFrom)} → ${fmtDate(dateTo)}`,
-    data
+    allData, inData, outData
   );
   return sendToLark(title, lines);
 };

@@ -70,7 +70,7 @@ router.get('/kpi', authMiddleware, adminMiddleware, async (req, res) => {
 // Call Report - Aggregated by day/month/year per employee
 router.get('/call-report', authMiddleware, async (req, res) => {
   try {
-    const { mode = 'day', from, to, userId } = req.query;
+    const { mode = 'day', from, to, userId, direction } = req.query;
     const isAdmin = req.user.role === 'ADMIN';
 
     // Build date filter
@@ -83,7 +83,8 @@ router.get('/call-report', authMiddleware, async (req, res) => {
     const where = {
       calledAt: { gte: dateFrom, lte: dateTo },
       ...(userId && userId !== 'all' ? { userId } : {}),
-      ...(!isAdmin ? { userId: req.user.userId } : {})
+      ...(!isAdmin ? { userId: req.user.userId } : {}),
+      ...(direction && direction !== 'all' ? { direction } : {})
     };
 
     const calls = await prisma.call.findMany({
