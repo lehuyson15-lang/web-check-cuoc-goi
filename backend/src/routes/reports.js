@@ -53,6 +53,10 @@ router.get('/kpi', authMiddleware, adminMiddleware, async (req, res) => {
       return {
         id: user.id,
         name: user.name,
+        status: user.status,
+        department: user.department,
+        phoneNumber: user.phoneNumber,
+        joinDate: user.joinDate,
         totalCalls: total,
         closedCalls: closed,
         missedCalls: missed,

@@ -32,8 +32,8 @@ const INIT_EMPLOYEES = [
 const ROLE_LABEL = { admin:"Admin", manager:"Quản lý", employee:"Nhân viên" };
 const ROLE_COLOR = { admin:"#a78bfa", manager:"#0ea5e9", employee:"#22d3a0" };
 const ROLE_ICON  = { admin:"👑", manager:"🧑💼", employee:"👤" };
-const STATUS_COLOR = { online:"#22d3a0", busy:"#f59e0b", offline:"#6b7280" };
-const STATUS_LABEL = { online:"Trực tuyến", busy:"Đang bận", offline:"Offline" };
+const STATUS_COLOR = { online:"#22d3a0", busy:"#f59e0b", offline:"#6b7280", pending:"#f87171" };
+const STATUS_LABEL = { online:"Trực tuyến", busy:"Đang bận", offline:"Offline", pending:"Chờ duyệt" };
 const SOURCES = ["Facebook Ads","Zalo OA","Website","Fanpage BSHL","Fanpage DrBody","Referral"];
 const DEFAULT_LIMIT = 15;
 
@@ -512,7 +512,7 @@ const TR = ({ text }) => (
   </div>
 );
 
-const CallLogModal = ({ employees, onClose, onSave, sessionLogs }) => {
+const CallLogModal = ({ employees, onClose, onSave, sessionLogs, addToast }) => {
   const [form, setForm] = useState({
     direction: "INBOUND", phone: "", name: "", service: "", empId: "", date: new Date().toISOString().slice(0,16), durM: "0", durS: "0", notes: ""
   });
@@ -543,7 +543,7 @@ const CallLogModal = ({ employees, onClose, onSave, sessionLogs }) => {
       setAudioFile(null);
     } catch (err) {
       console.error(err);
-      alert("Lỗi khi lưu cuộc gọi: " + (err.response?.data?.message || err.message));
+      addToast("overdue", "Lỗi khi lưu cuộc gọi: " + (err.response?.data?.message || err.message));
     } finally {
       setLoading(false);
     }
@@ -611,7 +611,7 @@ const CallLogModal = ({ employees, onClose, onSave, sessionLogs }) => {
   );
 };
 
-const EmployeeWizard = ({ onClose, onSave }) => {
+const EmployeeWizard = ({ onClose, onSave, addToast }) => {
   const [step, setStep] = useState(1);
   const [form, setForm] = useState({
     name: "", gender: "Nam", phone: "", email: "", dept: "", status: "online", joinDate: new Date().toISOString().slice(0,10), address: "", emer: "",
@@ -620,7 +620,7 @@ const EmployeeWizard = ({ onClose, onSave }) => {
   const [loading, setLoading] = useState(false);
 
   const next = () => {
-    if (step===1 && (!form.name || !form.email || !form.phone)) return alert("Vui lòng nhập đầy đủ thông tin bắt buộc");
+    if (step===1 && (!form.name || !form.email || !form.phone)) return addToast("info", "Vui lòng nhập đầy đủ thông tin bắt buộc");
     setStep(step+1);
   };
 
@@ -638,7 +638,7 @@ const EmployeeWizard = ({ onClose, onSave }) => {
       onSave(res.data.user);
     } catch (err) {
       console.error(err);
-      alert("Lỗi khi tạo nhân viên: " + (err.response?.data?.message || err.message));
+      addToast("overdue", "Lỗi khi tạo nhân viên: " + (err.response?.data?.message || err.message));
     } finally {
       setLoading(false);
     }
@@ -752,7 +752,7 @@ const EditEmpModal = ({ emp, onSave, onClose }) => {
               <select className="fsel" value={form.dept} onChange={f("dept")}><option>CSKH</option><option>Tư vấn</option><option>Kỹ thuật</option><option>Marketing</option></select>
             </div>
             <div className="fg"><label className="flbl">Trạng thái</label>
-              <select className="fsel" value={form.status} onChange={f("status")}><option value="online">Trực tuyến</option><option value="busy">Đang bận</option><option value="offline">Offline</option></select>
+              <select className="fsel" value={form.status} onChange={f("status")}><option value="online">Trực tuyến</option><option value="busy">Đang bận</option><option value="offline">Offline</option><option value="pending">Chờ duyệt</option></select>
             </div>
           </div>
           <div className="fg"><label className="flbl">Số điện thoại nội bộ</label><input className="finp" value={form.phone} onChange={f("phone")} /></div>
@@ -797,7 +797,7 @@ const EditAssignModal = ({ a, employees, onSave, onClose }) => {
 };
 
 // ── Edit Call ─────────────────────────────────────────────────────────────────
-const EditCallModal = ({ call, employees, onSave, onClose }) => {
+const EditCallModal = ({ call, employees, onSave, onClose, addToast }) => {
   const [note, setNote] = useState(call.note || call.notes || "");
   const [saving, setSaving] = useState(false);
   const emp = employees.find(e=>e.id===call.empId);
@@ -812,7 +812,7 @@ const EditCallModal = ({ call, employees, onSave, onClose }) => {
       onSave({ note, status: call.status });
     } catch (error) {
       console.error("Failed to save note", error);
-      alert("Lỗi khi lưu ghi chú");
+      addToast("overdue", "Lỗi khi lưu ghi chú");
     } finally {
       setSaving(false);
     }
@@ -1554,7 +1554,7 @@ const AccountsPage = ({ accounts, employees }) => {
   );
 };
 
-const EmpPage = ({ employees, allCalls, onSel, onAdd }) => {
+const EmpPage = ({ employees, allCalls, onSel, onAdd, onApprove }) => {
   return (
     <div className="content">
       <div className="sec-title">
@@ -1578,8 +1578,11 @@ const EmpPage = ({ employees, allCalls, onSel, onAdd }) => {
                 <td><div className="ecell"><div className="av">{e.avatar}</div>{e.name}</div></td>
                 <td>{e.dept}</td>
                 <td className="mono">{e.phone}</td>
-                <td><span className={`tag ${e.status==="online"?"tg":e.status==="busy"?"ty":"tb"}`}>{STATUS_LABEL[e.status]}</span></td>
-                <td><button className="btn btnp" onClick={() => onSel(e)}>Chi tiết</button></td>
+                <td><span className={`tag ${e.status==="online"?"tg":e.status==="busy"?"ty":e.status==="pending"?"tr":"tb"}`}>{STATUS_LABEL[e.status] || e.status}</span></td>
+                <td>
+                  <button className="btn btnp" onClick={() => onSel(e)}>Chi tiết</button>
+                  {e.status === 'pending' && <button className="btn" style={{marginLeft:8, background:"var(--accent)", color:"#0a0d14", fontWeight:800}} onClick={() => onApprove(e)}>✓ Duyệt</button>}
+                </td>
               </tr>
             ))}
           </tbody>
@@ -2044,6 +2047,16 @@ export default function App() {
     const [session, setSession] = useState(null); // { account, role }
     const [loginForm, setLoginForm] = useState({ username: "", password: "" });
     const [error, setError] = useState("");
+    const [isRegistering, setIsRegistering] = useState(false);
+    const [regForm, setRegForm] = useState({ name: "", email: "", phone: "", password: "" });
+    const [regSuccess, setRegSuccess] = useState(false);
+    const [toasts, setToasts] = useState([]);
+    
+    const addToast = (type, msg) => {
+      const id = Date.now() + Math.random();
+      setToasts(p => [...p, { id, type, msg, ts: Date.now() }]);
+    };
+    const removeToast = id => setToasts(p => p.filter(t => t.id !== id));
     const [page, setPage] = useState("dashboard");
     const [selEmp, setSelEmp] = useState(null);
     const [showCallLog, setShowCallLog] = useState(false);
@@ -2125,7 +2138,7 @@ export default function App() {
         setDeleteCallId(null);
       } catch (err) {
         console.error("Delete call error", err);
-        alert("Lỗi khi xoá cuộc gọi: " + (err.response?.data?.message || err.message));
+        addToast("overdue", "Lỗi khi xoá cuộc gọi: " + (err.response?.data?.message || err.message));
       }
     };
 
@@ -2188,7 +2201,7 @@ export default function App() {
           api.get("/reports/kpi").then(res => {
             if (res.data) {
               const mapped = res.data.map(u => ({
-                id: u.id, name: u.name, dept: "CSKH", status: "Trực tuyến", phone: "0901234567", joinDate: "2024-01-01"
+                id: u.id, name: u.name, dept: u.department || "CSKH", status: u.status || "online", phone: u.phoneNumber || "N/A", joinDate: u.joinDate ? new Date(u.joinDate).toLocaleDateString("vi-VN") : "N/A"
               }));
               setEmployees(mapped);
             }
@@ -2230,6 +2243,53 @@ export default function App() {
     };
 
     if (!session) {
+      if (isRegistering) {
+        return (
+          <div className="lpage">
+            <style>{STYLES}</style>
+            <div className="lbox">
+              <div className="lcard">
+                <div className="llogoic">📞</div>
+                <h2 style={{fontSize:22,fontWeight:800,marginBottom:6}}>Đăng ký tài khoản</h2>
+                {regSuccess ? (
+                  <div style={{textAlign:"center", padding:"20px 0"}}>
+                    <div style={{fontSize:40,marginBottom:10}}>✅</div>
+                    <p style={{fontSize:14,color:"var(--accent)",fontWeight:700}}>Đăng ký thành công!</p>
+                    <p style={{fontSize:12,color:"var(--text3)",marginTop:10,marginBottom:20}}>Tài khoản của bạn đang chờ Admin phê duyệt.</p>
+                    <button className="lbtn" onClick={()=>{setIsRegistering(false);setRegSuccess(false);}}>Về trang Đăng nhập</button>
+                  </div>
+                ) : (
+                  <>
+                  <p style={{fontSize:12,color:"var(--text3)",marginBottom:20}}>Điền thông tin để tạo tài khoản nhân viên mới</p>
+                  {error && <div className="lerr">{error}</div>}
+                  <form onSubmit={async(e)=>{
+                    e.preventDefault(); setError("");
+                    try {
+                      const res = await api.post("/auth/register", {
+                         name: regForm.name, email: regForm.email, phoneNumber: regForm.phone, password: regForm.password, role: "USER"
+                      });
+                      setRegSuccess(true);
+                      setRegForm({name:"",email:"",phone:"",password:""});
+                    } catch(err) {
+                      setError(err.response?.data?.message || "Đăng ký thất bại");
+                    }
+                  }}>
+                    <div className="fg"><input required className="linp" placeholder="Họ và tên" value={regForm.name} onChange={e=>setRegForm({...regForm,name:e.target.value})} autoFocus /></div>
+                    <div className="fg"><input required type="email" className="linp" placeholder="Email" value={regForm.email} onChange={e=>setRegForm({...regForm,email:e.target.value})} /></div>
+                    <div className="fg"><input required className="linp" placeholder="Số điện thoại" value={regForm.phone} onChange={e=>setRegForm({...regForm,phone:e.target.value})} /></div>
+                    <div className="fg"><input required className="linp" type="password" placeholder="Mật khẩu" value={regForm.password} onChange={e=>setRegForm({...regForm,password:e.target.value})} /></div>
+                    <button className="lbtn" type="submit">ĐĂNG KÝ</button>
+                  </form>
+                  <div style={{marginTop:16,textAlign:"center"}}>
+                    <button onClick={()=>{setIsRegistering(false);setError("");}} style={{background:"none",border:"none",color:"var(--text3)",fontSize:12,cursor:"pointer"}}>Đã có tài khoản? Đăng nhập</button>
+                  </div>
+                  </>
+                )}
+              </div>
+            </div>
+          </div>
+        );
+      }
       return (
         <div className="lpage">
           <style>{STYLES}</style>
@@ -2245,7 +2305,8 @@ export default function App() {
                 <button className="lbtn" type="submit">ĐĂNG NHẬP</button>
               </form>
               <div style={{marginTop:16,textAlign:"center"}}>
-                <button onClick={handleReset} style={{background:"none",border:"none",color:"var(--text3)",fontSize:11,cursor:"pointer"}}>Gặp sự cố? Nhấn để đặt lại</button>
+                <button onClick={()=>{setIsRegistering(true);setError("");}} type="button" style={{background:"none",border:"none",color:"var(--accent)",fontSize:13,fontWeight:700,cursor:"pointer", marginBottom:12}}>Chưa có tài khoản? Đăng ký</button><br/>
+                <button onClick={handleReset} type="button" style={{background:"none",border:"none",color:"var(--text3)",fontSize:11,cursor:"pointer"}}>Gặp sự cố? Nhấn để đặt lại</button>
               </div>
             </div>
           </div>
@@ -2308,6 +2369,9 @@ export default function App() {
           </aside>
 
           <main className="main">
+            <div className="toast-wrap">
+              {toasts.map(t => <ToastItem key={t.id} t={t} onDismiss={removeToast} />)}
+            </div>
             <div className="topbar">
               <div className="ptitle">{NAV.find(n => n && n.id === page)?.lb || "Tổng quan"}</div>
               {role === 'admin' && (
@@ -2324,8 +2388,8 @@ export default function App() {
                     const sla = prompt("Thời gian tối đa phải gọi (phút):", "5");
                     
                     api.post('/leads', { customerPhone: phone, customerName: name, assignedToId: emp, slaMinutes: parseFloat(sla||1) })
-                      .then(() => alert(`✅ Đã giao SĐT ${phone} cho ${emp}!\nHệ thống sẽ tự động quét và báo chuông "Quá Hạn" nếu NV chưa gọi sau ${sla} phút.`))
-                      .catch(e => alert("Lỗi: " + JSON.stringify(e)));
+                      .then(() => addToast("assigned", `✅ Đã giao SĐT ${phone} cho ${emp}!\nHệ thống sẽ tự động quét và báo chuông "Quá Hạn" nếu NV chưa gọi.`))
+                      .catch(e => addToast("overdue", "Lỗi: " + (e.response?.data?.message || e.message)));
                   }}
                 >📋 Giao số điện thoại</button>
               )}
@@ -2338,7 +2402,9 @@ export default function App() {
             {page === "my_calls" && <MyCallsPage account={session} calls={calls} openTr={openTr} setOpenTr={setOpenTr} transcripts={transcripts} setEditCall={setEditCall} can={can} onDeleteCall={setDeleteCallId} />}
             
             {!can("viewAllCalls") && page === "all_calls" ? <AccessDenied requiredRole="manager" /> : page === "all_calls" && <AllCallsPage calls={calls} employees={employees} openTr={openTr} setOpenTr={setOpenTr} transcripts={transcripts} onAdd={()=>setShowCallLog(true)} setEditCall={setEditCall} can={can} onDeleteCall={setDeleteCallId} />}
-            {!can("viewAllEmployees") && page === "employees" ? <AccessDenied requiredRole="manager" /> : page === "employees" && <EmpPage employees={employees} allCalls={calls} onSel={setSelEmp} onAdd={()=>setShowEmpWizard(true)} />}
+            {!can("viewAllEmployees") && page === "employees" ? <AccessDenied requiredRole="manager" /> : page === "employees" && <EmpPage employees={employees} allCalls={calls} onSel={setSelEmp} onAdd={()=>setShowEmpWizard(true)} onApprove={async(emp) => {
+              try { await api.patch(`/auth/users/${emp.id}/status`, {status:'online'}); addToast("called", `Đã phê duyệt tài khoản ${emp.name}`); fetchAllData(); } catch(e){ addToast('overdue', "Lỗi duyệt: " + (e.response?.data?.message || e.message)); }
+            }} />}
             
             {!can("manageAccounts") && page === "accounts" ? <AccessDenied requiredRole="admin" /> : page === "accounts" && <AccountsPage accounts={accounts} employees={employees} />}
             {!can("manageAccounts") && page === "permissions" ? <AccessDenied requiredRole="admin" /> : page === "permissions" && <PermMatrixPage permissions={permissions} onUpdate={setPermissions} />}
@@ -2349,9 +2415,9 @@ export default function App() {
 
         {selEmp && <EmpDetailModal emp={selEmp} calls={calls} onClose={() => setSelEmp(null)} openTr={openTr} setOpenTr={setOpenTr} transcripts={transcripts} />}
 
-        {showCallLog && <CallLogModal employees={employees} onClose={()=>setShowCallLog(false)} onSave={handleNewCall} sessionLogs={sessionLogs} />}
-        {showEmpWizard && <EmployeeWizard onClose={()=>setShowEmpWizard(false)} onSave={handleNewEmp} />}
-        {editCall && <EditCallModal call={editCall} employees={employees} onClose={() => setEditCall(null)} onSave={async (updates) => {
+        {showCallLog && <CallLogModal employees={employees} onClose={()=>setShowCallLog(false)} onSave={handleNewCall} sessionLogs={sessionLogs} addToast={addToast} />}
+        {showEmpWizard && <EmployeeWizard onClose={()=>setShowEmpWizard(false)} onSave={handleNewEmp} addToast={addToast} />}
+        {editCall && <EditCallModal call={editCall} employees={employees} onClose={() => setEditCall(null)} addToast={addToast} onSave={async (updates) => {
           setCalls(prev => prev.map(c => c.id === editCall.id ? { ...c, notes: updates.note, note: updates.note, status: updates.status } : c));
           setEditCall(null);
         }} />}

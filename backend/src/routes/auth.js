@@ -3,6 +3,7 @@ const router = express.Router();
 const { PrismaClient } = require('@prisma/client');
 const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
+const { authMiddleware, adminMiddleware } = require('../services/authMiddleware');
 
 const prisma = new PrismaClient();
 
@@ -31,7 +32,7 @@ router.post('/register', async (req, res) => {
         gender,
         phoneNumber,
         department,
-        status: status || 'online',
+        status: status || 'pending',
         joinDate: joinDate ? new Date(joinDate) : new Date(),
         address,
         emergencyContact,
@@ -68,6 +69,10 @@ router.post('/login', async (req, res) => {
       return res.status(400).json({ message: 'Invalid credentials' });
     }
 
+    if (user.status === 'pending') {
+      return res.status(403).json({ message: 'Tài khoản của bạn đang chờ Admin duyệt' });
+    }
+
     const token = jwt.sign(
       { userId: user.id, role: user.role },
       process.env.JWT_SECRET,
@@ -75,6 +80,21 @@ router.post('/login', async (req, res) => {
     );
 
     res.json({ token, user });
+  } catch (error) {
+    res.status(500).json({ message: 'Internal server error', error: error.message });
+  }
+});
+
+// Update user status (Admin only)
+router.patch('/users/:id/status', authMiddleware, adminMiddleware, async (req, res) => {
+  try {
+    const { status } = req.body;
+    const { id } = req.params;
+    const user = await prisma.user.update({
+      where: { id },
+      data: { status }
+    });
+    res.json(user);
   } catch (error) {
     res.status(500).json({ message: 'Internal server error', error: error.message });
   }
