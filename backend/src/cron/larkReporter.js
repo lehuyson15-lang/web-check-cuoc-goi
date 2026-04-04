@@ -80,7 +80,7 @@ const buildReport = async (dateFrom, dateTo, direction) => {
   const empMap = {};
   calls.forEach(c => {
     const name = c.user?.name || 'Không rõ';
-    if (!empMap[name]) empMap[name] = { total: 0, closed: 0, missed: 0, dur: 0, notes: [] };
+    if (!empMap[name]) empMap[name] = { total: 0, closed: 0, missed: 0, dur: 0, notes: [], slaViolations: 0, slaLeads: [] };
     empMap[name].total++;
     if (c.result === 'CLOSED') empMap[name].closed++;
     if (c.result === 'NO_ANSWER') empMap[name].missed++;
@@ -88,7 +88,32 @@ const buildReport = async (dateFrom, dateTo, direction) => {
     if (c.notes) empMap[name].notes.push(c.notes);
   });
 
-  return { total, closed, missed, callback, pending, totalDur, rate, empMap };
+  // ── SLA Violations ─────────────────────────────────────────────────────
+  const slaWhere = {
+    status: 'EXPIRED',
+    slaDeadline: { gte: dateFrom, lte: dateTo },
+  };
+  const expiredLeads = await prisma.lead.findMany({
+    where: slaWhere,
+    include: { assignedTo: { select: { name: true } } },
+    orderBy: { slaDeadline: 'asc' }
+  });
+
+  let totalSlaViolations = 0;
+  expiredLeads.forEach(lead => {
+    const empName = lead.assignedTo?.name || 'Không rõ';
+    if (!empMap[empName]) empMap[empName] = { total: 0, closed: 0, missed: 0, dur: 0, notes: [], slaViolations: 0, slaLeads: [] };
+    empMap[empName].slaViolations++;
+    empMap[empName].slaLeads.push({
+      phone: lead.customerPhone,
+      name: lead.customerName,
+      assignedAt: lead.assignedAt,
+      deadline: lead.slaDeadline
+    });
+    totalSlaViolations++;
+  });
+
+  return { total, closed, missed, callback, pending, totalDur, rate, empMap, totalSlaViolations };
 };
 
 // ── Format Report Section ────────────────────────────────────────────────────
@@ -97,6 +122,9 @@ const formatSection = (sectionLabel, data) => {
   lines.push(`${sectionLabel}`);
   lines.push(`   📞 Tổng: ${data.total} | ✅ Chốt: ${data.closed} | 📵 Nhỡ: ${data.missed} | ↩️ Gọi lại: ${data.callback} | ⏳ Chờ: ${data.pending}`);
   lines.push(`   ⏱ Thời lượng: ${fmtDur(data.totalDur)} | 📈 Tỷ lệ chốt: ${data.rate}%`);
+  if (data.totalSlaViolations > 0) {
+    lines.push(`   🚨 Vi phạm SLA: ${data.totalSlaViolations} lần`);
+  }
   return lines;
 };
 
@@ -133,6 +161,9 @@ const formatReport = (label, period, allData, inData, outData) => {
     lines.push(`🧑‍💼 ${name}`);
     lines.push(`   📞 ${e.total} cuộc (📥${eIn.total} đến | 📤${eOut.total} đi) | ✅ ${e.closed} chốt | 📵 ${e.missed} nhỡ | 📈 ${eRate}%`);
     lines.push(`   ⏱ Thời lượng: ${fmtDur(e.dur)}`);
+    if (e.slaViolations > 0) {
+      lines.push(`   🚨 Vi phạm SLA: ${e.slaViolations} lần`);
+    }
     if (e.notes.length > 0) {
       lines.push(`   📝 Ghi chú: ${e.notes.length} mục`);
       e.notes.slice(-3).forEach(n => {
@@ -145,6 +176,28 @@ const formatReport = (label, period, allData, inData, outData) => {
 
   if (empNames.length === 0) {
     lines.push('   Không có dữ liệu cuộc gọi.');
+  }
+
+  // ── SLA Violations Detail Section ──────────────────────────────────────
+  if (allData.totalSlaViolations > 0) {
+    lines.push('━━━━━━━━━━━━━━━━━━━━━━━');
+    lines.push(`🚨 VI PHẠM SLA — Tổng: ${allData.totalSlaViolations} lần quá hạn`);
+    lines.push('');
+
+    empNames.forEach(name => {
+      const e = allData.empMap[name];
+      if (e.slaViolations > 0) {
+        lines.push(`   🧑‍💼 ${name}: ${e.slaViolations} vi phạm`);
+        e.slaLeads.slice(-5).forEach(l => {
+          const deadlineStr = new Date(l.deadline).toLocaleString('vi-VN', { hour: '2-digit', minute: '2-digit', day: '2-digit', month: '2-digit' });
+          lines.push(`      • SĐT ${l.phone}${l.name ? ` (${l.name})` : ''} — Hạn: ${deadlineStr}`);
+        });
+        if (e.slaLeads.length > 5) {
+          lines.push(`      ... và ${e.slaLeads.length - 5} vi phạm khác`);
+        }
+        lines.push('');
+      }
+    });
   }
 
   lines.push('━━━━━━━━━━━━━━━━━━━━━━━');

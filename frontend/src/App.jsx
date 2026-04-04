@@ -1665,22 +1665,25 @@ const ReportsPage = () => {
     const fmt = d => d.toISOString().slice(0,10);
     if (key === "today") { setFrom(fmt(now)); setTo(fmt(now)); setMode("day"); }
     else if (key === "7d") { const d = new Date(); d.setDate(d.getDate()-6); setFrom(fmt(d)); setTo(fmt(now)); setMode("day"); }
+    else if (key === "4w") { const d = new Date(); d.setDate(d.getDate()-27); setFrom(fmt(d)); setTo(fmt(now)); setMode("week"); }
     else if (key === "month") { setFrom(`${now.getFullYear()}-${String(now.getMonth()+1).padStart(2,"0")}-01`); setTo(fmt(now)); setMode("day"); }
     else if (key === "year") { setFrom(`${now.getFullYear()}-01-01`); setTo(fmt(now)); setMode("month"); }
   };
 
   // Summary stats from totals
   const summary = useMemo(() => {
-    if (!report) return { total: 0, closed: 0, missed: 0, rate: "0.0" };
+    if (!report) return { total: 0, closed: 0, missed: 0, rate: "0.0", slaViolations: 0 };
     const t = Object.values(report.totals || {}).reduce((acc, v) => ({
-      total: acc.total + v.totalCalls, closed: acc.closed + v.closed, missed: acc.missed + v.missed
-    }), { total: 0, closed: 0, missed: 0 });
+      total: acc.total + v.totalCalls, closed: acc.closed + v.closed, missed: acc.missed + v.missed,
+      slaViolations: acc.slaViolations + (v.slaViolations || 0)
+    }), { total: 0, closed: 0, missed: 0, slaViolations: 0 });
     return { ...t, rate: t.total > 0 ? (t.closed / t.total * 100).toFixed(1) : "0.0" };
   }, [report]);
 
   // Format period label for display
   const periodLabel = (p) => {
     if (mode === "day") { const [y,m,d] = p.split("-"); return `${d}/${m}`; }
+    if (mode === "week") { const m = p.match(/^(\d{4})-W(\d{2})$/); return m ? `T${m[2]}/${m[1].slice(2)}` : p; }
     if (mode === "month") { const [y,m] = p.split("-"); const names = ["","Th1","Th2","Th3","Th4","Th5","Th6","Th7","Th8","Th9","Th10","Th11","Th12"]; return `${names[parseInt(m)]}/${y.slice(2)}`; }
     return p;
   };
@@ -1726,7 +1729,7 @@ const ReportsPage = () => {
       {/* Toolbar */}
       <div className="rep-toolbar">
         <div className="mode-toggle">
-          {[["day","Ngày"],["month","Tháng"],["year","Năm"]].map(([k,l])=>(
+          {[["day","Ngày"],["week","Tuần"],["month","Tháng"],["year","Năm"]].map(([k,l])=>(
             <button key={k} className={`mode-btn ${mode===k?"on":""}`} onClick={()=>setMode(k)}>{l}</button>
           ))}
         </div>
@@ -1734,7 +1737,7 @@ const ReportsPage = () => {
         <span style={{color:"var(--text3)"}}>→</span>
         <input type="date" className="dinp" value={to} onChange={e=>setTo(e.target.value)} />
         <div className="qbtns">
-          {[["today","Hôm nay"],["7d","7 ngày"],["month","Tháng này"],["year","Năm nay"]].map(([k,l])=>(
+          {[["today","Hôm nay"],["7d","7 ngày"],["4w","4 tuần"],["month","Tháng này"],["year","Năm nay"]].map(([k,l])=>(
             <button key={k} className="qb" onClick={()=>setQuick(k)}>{l}</button>
           ))}
         </div>
@@ -1776,7 +1779,8 @@ const ReportsPage = () => {
             <tbody>
               {visibleEmps.map(emp => {
                 const empData = report.data[emp.id] || {};
-                const empTotal = Object.values(empData).reduce((a,v)=>({tc:a.tc+v.totalCalls,cl:a.cl+v.closed,ms:a.ms+v.missed}),{tc:0,cl:0,ms:0});
+                const empSla = report.slaData?.[emp.id] || {};
+                const empTotal = Object.values(empData).reduce((a,v)=>({tc:a.tc+v.totalCalls,cl:a.cl+v.closed,ms:a.ms+v.missed,sla:a.sla+(v.slaViolations||0)}),{tc:0,cl:0,ms:0,sla:0});
                 return (
                   <tr key={emp.id}>
                     <td className="sticky">
@@ -1787,29 +1791,33 @@ const ReportsPage = () => {
                     </td>
                     {report.periods.map(p => {
                       const cell = empData[p];
-                      if (!cell) return <td key={p} style={{color:"var(--text3)",opacity:.4}}>—</td>;
-                      const hasNotes = cell.notes && cell.notes.length > 0;
+                      const slaCell = empSla[p];
+                      if (!cell && !slaCell) return <td key={p} style={{color:"var(--text3)",opacity:.4}}>—</td>;
+                      const hasNotes = cell?.notes && cell.notes.length > 0;
+                      const slaCount = slaCell?.count || cell?.slaViolations || 0;
                       return (
                         <td key={p}
                           style={{cursor:"pointer",position:"relative"}}
-                          onClick={()=>setDetailModal({empName:emp.name,period:p,cell})}
+                          onClick={()=>setDetailModal({empName:emp.name,empId:emp.id,period:p,cell:cell||{totalCalls:0,closed:0,missed:0,pending:0,callback:0,totalDuration:0,notes:[]},slaCell:slaCell})}
                         >
-                          <div style={{fontWeight:800,fontSize:14}}>{cell.totalCalls}</div>
+                          <div style={{fontWeight:800,fontSize:14}}>{cell?.totalCalls||0}</div>
                           <div style={{fontSize:10,display:"flex",justifyContent:"center",gap:6,marginTop:2}}>
-                            {cell.closed>0&&<span className="rep-cell-good">✓{cell.closed}</span>}
-                            {cell.missed>0&&<span className="rep-cell-bad">✗{cell.missed}</span>}
-                            {cell.callback>0&&<span className="rep-cell-warn">↩{cell.callback}</span>}
+                            {(cell?.closed||0)>0&&<span className="rep-cell-good">✓{cell.closed}</span>}
+                            {(cell?.missed||0)>0&&<span className="rep-cell-bad">✗{cell.missed}</span>}
+                            {(cell?.callback||0)>0&&<span className="rep-cell-warn">↩{cell.callback}</span>}
                           </div>
+                          {slaCount>0&&<div style={{fontSize:10,color:"var(--danger)",fontWeight:800,marginTop:1}}>🚨{slaCount}</div>}
                           {hasNotes&&<div style={{position:"absolute",top:3,right:5,fontSize:9,opacity:.6}}>📝</div>}
                         </td>
                       );
                     })}
-                    <td style={{fontWeight:800,background:"rgba(34,211,160,.05)"}}>
+                    <td style={{fontWeight:800,background:empTotal.sla>0?"rgba(248,113,113,.06)":"rgba(34,211,160,.05)"}}>
                       <div>{empTotal.tc}</div>
                       <div style={{fontSize:10,display:"flex",justifyContent:"center",gap:6,marginTop:2}}>
                         {empTotal.cl>0&&<span className="rep-cell-good">✓{empTotal.cl}</span>}
                         {empTotal.ms>0&&<span className="rep-cell-bad">✗{empTotal.ms}</span>}
                       </div>
+                      {empTotal.sla>0&&<div style={{fontSize:10,color:"var(--danger)",fontWeight:800,marginTop:1}}>🚨{empTotal.sla} VP</div>}
                     </td>
                   </tr>
                 );
@@ -1819,20 +1827,25 @@ const ReportsPage = () => {
                 <td className="sticky" style={{fontWeight:800}}>🏢 TỔNG CỘNG</td>
                 {report.periods.map(p => {
                   const t = report.totals[p] || {};
+                  const st = report.slaTotals?.[p] || {};
                   return (
                     <td key={p}
                       style={{cursor:"pointer"}}
-                      onClick={()=>setDetailModal({empName:"TỔNG CỘNG",period:p,cell:t})}
+                      onClick={()=>setDetailModal({empName:"TỔNG CỘNG",period:p,cell:t,slaCell:st})}
                     >
                       <div style={{fontWeight:800,fontSize:14}}>{t.totalCalls||0}</div>
                       <div style={{fontSize:10,display:"flex",justifyContent:"center",gap:6,marginTop:2}}>
                         {(t.closed||0)>0&&<span className="rep-cell-good">✓{t.closed}</span>}
                         {(t.missed||0)>0&&<span className="rep-cell-bad">✗{t.missed}</span>}
                       </div>
+                      {(st.count||t.slaViolations||0)>0&&<div style={{fontSize:10,color:"var(--danger)",fontWeight:800,marginTop:1}}>🚨{st.count||t.slaViolations}</div>}
                     </td>
                   );
                 })}
-                <td style={{fontWeight:900,fontSize:16,background:"rgba(34,211,160,.1)"}}>{summary.total}</td>
+                <td style={{fontWeight:900,fontSize:16,background:summary.slaViolations>0?"rgba(248,113,113,.08)":"rgba(34,211,160,.1)"}}>
+                  <div>{summary.total}</div>
+                  {summary.slaViolations>0&&<div style={{fontSize:10,color:"var(--danger)",fontWeight:800,marginTop:2}}>🚨{summary.slaViolations} VP</div>}
+                </td>
               </tr>
             </tbody>
           </table>
@@ -1856,12 +1869,40 @@ const ReportsPage = () => {
             </div>
             <div className="mbody">
               {/* Stats mini */}
-              <div style={{display:"grid",gridTemplateColumns:"repeat(4,1fr)",gap:8,marginBottom:16}}>
+              <div style={{display:"grid",gridTemplateColumns:"repeat(5,1fr)",gap:8,marginBottom:16}}>
                 <div className="pbox"><div className="pnum">{detailModal.cell.totalCalls}</div><div className="plbl">Tổng</div></div>
                 <div className="pbox"><div className="pnum" style={{color:"var(--accent)"}}>{detailModal.cell.closed}</div><div className="plbl">Chốt</div></div>
                 <div className="pbox"><div className="pnum" style={{color:"var(--danger)"}}>{detailModal.cell.missed}</div><div className="plbl">Nhỡ</div></div>
                 <div className="pbox"><div className="pnum" style={{color:"var(--text2)"}}>{fmtDur(detailModal.cell.totalDuration||0)}</div><div className="plbl">Tổng TL</div></div>
+                <div className="pbox" style={{borderColor:detailModal.slaCell?.count>0?"rgba(248,113,113,.4)":"var(--border)",background:detailModal.slaCell?.count>0?"rgba(248,113,113,.06)":""}}><div className="pnum" style={{color:"var(--danger)"}}>{detailModal.slaCell?.count||detailModal.cell.slaViolations||0}</div><div className="plbl">🚨 VP SLA</div></div>
               </div>
+
+              {/* SLA Violations list */}
+              {detailModal.slaCell && detailModal.slaCell.leads && detailModal.slaCell.leads.length > 0 && (
+                <>
+                  <div style={{fontSize:13,fontWeight:700,marginBottom:10,color:"var(--danger)"}}>🚨 Vi phạm SLA ({detailModal.slaCell.leads.length})</div>
+                  <div style={{display:"flex",flexDirection:"column",gap:6,marginBottom:16}}>
+                    {detailModal.slaCell.leads.map((l,i) => (
+                      <div key={i} style={{display:"flex",alignItems:"center",gap:10,padding:"10px 12px",background:"rgba(248,113,113,.06)",border:"1px solid rgba(248,113,113,.2)",borderRadius:8}}>
+                        <span style={{fontSize:16}}>🚫</span>
+                        <div style={{flex:1}}>
+                          <div style={{display:"flex",alignItems:"center",gap:8}}>
+                            <span style={{fontFamily:"var(--mono)",fontWeight:700,fontSize:13}}>{l.phone}</span>
+                            {l.name && <span style={{fontSize:12,color:"var(--text2)"}}>({l.name})</span>}
+                            {l.empName && <span style={{fontSize:11,color:"var(--accent2)"}}>• {l.empName}</span>}
+                          </div>
+                          <div style={{fontSize:11,color:"var(--text3)",marginTop:3}}>
+                            📅 Giao: {new Date(l.assignedAt).toLocaleString("vi-VN",{hour:"2-digit",minute:"2-digit",day:"2-digit",month:"2-digit"})}
+                            {" → "}
+                            ⏰ Hạn: {new Date(l.deadline).toLocaleString("vi-VN",{hour:"2-digit",minute:"2-digit",day:"2-digit",month:"2-digit"})}
+                          </div>
+                        </div>
+                        <span style={{fontSize:11,fontWeight:800,color:"var(--danger)",background:"rgba(248,113,113,.12)",padding:"2px 8px",borderRadius:99}}>QUÁ HẠN</span>
+                      </div>
+                    ))}
+                  </div>
+                </>
+              )}
 
               {/* Notes list */}
               {detailModal.cell.notes && detailModal.cell.notes.length > 0 ? (
@@ -1888,7 +1929,7 @@ const ReportsPage = () => {
                   </div>
                 </>
               ) : (
-                <div className="nodata" style={{padding:20}}>
+                !detailModal.slaCell?.leads?.length && <div className="nodata" style={{padding:20}}>
                   <div style={{fontSize:16,marginBottom:6}}>📭</div>
                   Không có ghi chú nào trong khoảng thời gian này
                 </div>

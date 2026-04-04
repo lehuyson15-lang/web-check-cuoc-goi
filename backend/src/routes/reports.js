@@ -67,7 +67,17 @@ router.get('/kpi', authMiddleware, adminMiddleware, async (req, res) => {
   }
 });
 
-// Call Report - Aggregated by day/month/year per employee
+// Helper: get ISO week key (YYYY-Wxx)
+const getISOWeekKey = (date) => {
+  const d = new Date(date);
+  d.setHours(0, 0, 0, 0);
+  d.setDate(d.getDate() + 3 - (d.getDay() + 6) % 7);
+  const week1 = new Date(d.getFullYear(), 0, 4);
+  const weekNum = 1 + Math.round(((d - week1) / 86400000 - 3 + (week1.getDay() + 6) % 7) / 7);
+  return `${d.getFullYear()}-W${String(weekNum).padStart(2, '0')}`;
+};
+
+// Call Report - Aggregated by day/week/month/year per employee
 router.get('/call-report', authMiddleware, async (req, res) => {
   try {
     const { mode = 'day', from, to, userId, direction } = req.query;
@@ -98,10 +108,11 @@ router.get('/call-report', authMiddleware, async (req, res) => {
       ? await prisma.user.findMany({ select: { id: true, name: true }, orderBy: { name: 'asc' } })
       : [{ id: req.user.userId, name: req.user.name || 'Bạn' }];
 
-    // Period key formatter
+    // Period key formatter (supports day, week, month, year)
     const getPeriodKey = (date) => {
       const d = new Date(date);
       if (mode === 'day') return d.toISOString().slice(0, 10); // YYYY-MM-DD
+      if (mode === 'week') return getISOWeekKey(d); // YYYY-Wxx
       if (mode === 'month') return d.toISOString().slice(0, 7); // YYYY-MM
       return String(d.getFullYear()); // YYYY
     };
@@ -118,7 +129,7 @@ router.get('/call-report', authMiddleware, async (req, res) => {
     // Initialize
     employees.forEach(emp => { data[emp.id] = {}; });
     periods.forEach(p => {
-      totals[p] = { totalCalls: 0, closed: 0, missed: 0, pending: 0, callback: 0, totalDuration: 0, notes: [] };
+      totals[p] = { totalCalls: 0, closed: 0, missed: 0, pending: 0, callback: 0, totalDuration: 0, notes: [], slaViolations: 0 };
     });
 
     calls.forEach(c => {
@@ -127,7 +138,7 @@ router.get('/call-report', authMiddleware, async (req, res) => {
 
       if (!data[uid]) data[uid] = {};
       if (!data[uid][pk]) {
-        data[uid][pk] = { totalCalls: 0, closed: 0, missed: 0, pending: 0, callback: 0, totalDuration: 0, notes: [] };
+        data[uid][pk] = { totalCalls: 0, closed: 0, missed: 0, pending: 0, callback: 0, totalDuration: 0, notes: [], slaViolations: 0 };
       }
 
       const cell = data[uid][pk];
@@ -150,7 +161,65 @@ router.get('/call-report', authMiddleware, async (req, res) => {
       if (c.notes) tot.notes.push({ phone: c.customerPhone, name: c.customerName, notes: c.notes, result: c.result, calledAt: c.calledAt, duration: c.durationSeconds, empName: c.user?.name });
     });
 
-    res.json({ employees, periods, data, totals });
+    // ── SLA Violations (Lead status = EXPIRED) ──────────────────────────────
+    const slaWhere = {
+      status: 'EXPIRED',
+      slaDeadline: { gte: dateFrom, lte: dateTo },
+      ...(userId && userId !== 'all' ? { assignedToId: userId } : {}),
+      ...(!isAdmin ? { assignedToId: req.user.userId } : {})
+    };
+
+    const expiredLeads = await prisma.lead.findMany({
+      where: slaWhere,
+      include: { assignedTo: { select: { id: true, name: true } } },
+      orderBy: { slaDeadline: 'asc' }
+    });
+
+    // slaData: { userId: { period: { count, leads[] } } }
+    const slaData = {};
+    const slaTotals = {};
+
+    employees.forEach(emp => { slaData[emp.id] = {}; });
+    periods.forEach(p => { slaTotals[p] = { count: 0, leads: [] }; });
+
+    expiredLeads.forEach(lead => {
+      const pk = getPeriodKey(lead.slaDeadline);
+      const uid = lead.assignedToId;
+
+      // Make sure period exists (lead might be in a period not covered by calls)
+      if (!slaTotals[pk]) {
+        slaTotals[pk] = { count: 0, leads: [] };
+        if (!periods.includes(pk)) periods.push(pk);
+      }
+
+      if (!slaData[uid]) slaData[uid] = {};
+      if (!slaData[uid][pk]) slaData[uid][pk] = { count: 0, leads: [] };
+
+      const leadInfo = {
+        phone: lead.customerPhone,
+        name: lead.customerName,
+        assignedAt: lead.assignedAt,
+        deadline: lead.slaDeadline
+      };
+
+      slaData[uid][pk].count++;
+      slaData[uid][pk].leads.push(leadInfo);
+      slaTotals[pk].count++;
+      slaTotals[pk].leads.push({ ...leadInfo, empName: lead.assignedTo?.name });
+
+      // Also add to the per-employee cell data
+      if (data[uid] && data[uid][pk]) {
+        data[uid][pk].slaViolations = (data[uid][pk].slaViolations || 0) + 1;
+      }
+      if (totals[pk]) {
+        totals[pk].slaViolations = (totals[pk].slaViolations || 0) + 1;
+      }
+    });
+
+    // Re-sort periods in case new ones were added from SLA data
+    periods.sort();
+
+    res.json({ employees, periods, data, totals, slaData, slaTotals });
   } catch (error) {
     console.error('[Call Report] Error:', error);
     res.status(500).json({ message: 'Internal server error', error: error.message });
