@@ -1680,8 +1680,7 @@ const ReportsPage = () => {
     const now = new Date();
     const fmt = d => d.toISOString().slice(0,10);
     if (key === "today") { setFrom(fmt(now)); setTo(fmt(now)); setMode("day"); }
-    else if (key === "7d") { const d = new Date(); d.setDate(d.getDate()-6); setFrom(fmt(d)); setTo(fmt(now)); setMode("day"); }
-    else if (key === "4w") { const d = new Date(); d.setDate(d.getDate()-27); setFrom(fmt(d)); setTo(fmt(now)); setMode("week"); }
+    else if (key === "week") { const d = new Date(); const dow = d.getDay() || 7; d.setDate(d.getDate() - dow + 1); setFrom(fmt(d)); setTo(fmt(now)); setMode("day"); }
     else if (key === "month") { setFrom(`${now.getFullYear()}-${String(now.getMonth()+1).padStart(2,"0")}-01`); setTo(fmt(now)); setMode("day"); }
     else if (key === "year") { setFrom(`${now.getFullYear()}-01-01`); setTo(fmt(now)); setMode("month"); }
   };
@@ -1753,7 +1752,7 @@ const ReportsPage = () => {
         <span style={{color:"var(--text3)"}}>→</span>
         <input type="date" className="dinp" value={to} onChange={e=>setTo(e.target.value)} />
         <div className="qbtns">
-          {[["today","Hôm nay"],["7d","7 ngày"],["4w","4 tuần"],["month","Tháng này"],["year","Năm nay"]].map(([k,l])=>(
+          {[["today","Hôm nay"],["week","Tuần này"],["month","Tháng này"],["year","Năm nay"]].map(([k,l])=>(
             <button key={k} className="qb" onClick={()=>setQuick(k)}>{l}</button>
           ))}
         </div>
