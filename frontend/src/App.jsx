@@ -120,10 +120,10 @@ const STYLES = `
   @import url('https://fonts.googleapis.com/css2?family=Be+Vietnam+Pro:wght@300;400;500;600;700;800;900&family=JetBrains+Mono:wght@400;500;700&display=swap');
   *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
   :root{
-    --bg:#0a0d14;--bg2:#111827;--bg3:#1a2233;--surface:#1e2a3a;--surface2:#263347;
-    --border:#2a3a50;--accent:#22d3a0;--accent2:#0ea5e9;--danger:#f87171;
+    --bg:#0f172a;--bg2:#1e293b;--bg3:#334155;--surface:#1e293b;--surface2:#334155;
+    --border:#334155;--accent:#d4af37;--accent2:#facc15;--danger:#f87171;
     --warn:#fbbf24;--purple:#a78bfa;
-    --text:#e2e8f0;--text2:#94a3b8;--text3:#64748b;
+    --text:#f8fafc;--text2:#cbd5e1;--text3:#94a3b8;
     --font:'Be Vietnam Pro',sans-serif;--mono:'JetBrains Mono',monospace;--r:12px;--rs:8px
   }
   body{background:var(--bg);color:var(--text);font-family:var(--font);font-size:14px;line-height:1.6;min-height:100vh;overflow-x:hidden}
@@ -131,15 +131,15 @@ const STYLES = `
   .app{display:flex;min-height:100vh}
 
   /* LOGIN */
-  .lpage{min-height:100vh;display:flex;align-items:center;justify-content:center;background:var(--bg);position:relative;overflow:hidden}
+  .lpage{min-height:100vh;display:flex;align-items:center;justify-content:center;background:linear-gradient(135deg, rgba(212,175,55,0.15) 0%, var(--bg) 100%), var(--bg);position:relative;overflow:hidden}
   .lorb{position:absolute;border-radius:50%;filter:blur(80px);opacity:.16;pointer-events:none}
   .lbox{position:relative;z-index:1;width:100%;max-width:440px;margin:20px}
-  .llogoic{width:52px;height:52px;background:linear-gradient(135deg,var(--accent),var(--accent2));border-radius:14px;display:inline-flex;align-items:center;justify-content:center;font-size:24px;margin-bottom:10px;box-shadow:0 8px 24px rgba(34,211,160,.28)}
+  .llogoic{width:52px;height:52px;background:var(--bg2);border-radius:14px;display:inline-flex;align-items:center;justify-content:center;font-size:24px;margin-bottom:10px;box-shadow:0 8px 24px rgba(212,175,55,.28); border: 1px solid var(--accent)}
   .lcard{background:var(--bg2);border:1px solid var(--border);border-radius:18px;padding:30px;box-shadow:0 24px 60px rgba(0,0,0,.5)}
   .linp{width:100%;padding:11px 13px;background:var(--surface);border:1.5px solid var(--border);border-radius:var(--rs);color:var(--text);font-family:var(--font);font-size:14px;outline:none;transition:border-color .2s}
   .linp:focus{border-color:var(--accent)}.linp::placeholder{color:var(--text3)}
-  .lbtn{width:100%;padding:12px;background:linear-gradient(135deg,var(--accent),var(--accent2));border:none;border-radius:var(--rs);color:#0a0d14;font-family:var(--font);font-size:14px;font-weight:800;cursor:pointer;transition:opacity .2s;margin-top:6px}
-  .lbtn:hover{opacity:.87}.lbtn:disabled{opacity:.38;cursor:default}
+  .lbtn{width:100%;padding:12px;background:linear-gradient(135deg,var(--accent),var(--accent2));border:none;border-radius:var(--rs);color:#0f172a;font-family:var(--font);font-size:14px;font-weight:800;cursor:pointer;transition:all .2s;margin-top:6px;box-shadow:0 4px 12px rgba(212,175,55,.2)}
+  .lbtn:hover{opacity:.9;box-shadow:0 6px 16px rgba(212,175,55,.3);transform:translateY(-1px)}.lbtn:disabled{opacity:.38;cursor:default;transform:none}
   .lerr{background:rgba(248,113,113,.09);border:1px solid rgba(248,113,113,.3);border-radius:var(--rs);padding:9px 13px;font-size:13px;color:var(--danger);margin-bottom:14px}
   .demo-item{display:flex;align-items:center;gap:9px;padding:8px 11px;background:var(--surface);border:1px solid var(--border);border-radius:var(--rs);cursor:pointer;transition:all .2s;margin-bottom:5px}
   .demo-item:hover{border-color:var(--accent2);background:var(--surface2)}
@@ -148,12 +148,13 @@ const STYLES = `
   .sb{width:228px;min-height:100vh;background:var(--bg2);border-right:1px solid var(--border);display:flex;flex-direction:column;position:sticky;top:0;height:100vh;overflow-y:auto;flex-shrink:0}
   .sblogo{padding:18px 16px 14px;border-bottom:1px solid var(--border)}
   .sblogow{display:flex;align-items:center;gap:9px}
-  .sblogoic{width:30px;height:30px;background:linear-gradient(135deg,var(--accent),var(--accent2));border-radius:8px;display:flex;align-items:center;justify-content:center;font-size:14px}
+  .sblogoic{width:34px;height:34px;background:none;display:flex;align-items:center;justify-content:center}
+  .sblogoic img{width:100%;height:100%;object-fit:contain}
   .sbnav{padding:11px 9px;flex:1}
   .sbnlbl{font-size:10px;text-transform:uppercase;letter-spacing:1.3px;color:var(--text3);padding:0 8px;margin:12px 0 4px}
   .sbnitem{display:flex;align-items:center;gap:8px;padding:8px 10px;border-radius:var(--rs);cursor:pointer;color:var(--text2);font-size:13px;font-weight:500;transition:all .2s;margin-bottom:1px}
   .sbnitem:hover{background:var(--surface);color:var(--text)}
-  .sbnitem.act{background:linear-gradient(90deg,rgba(34,211,160,.13),rgba(34,211,160,.03));color:var(--accent);border-left:2px solid var(--accent)}
+  .sbnitem.act{background:linear-gradient(90deg,rgba(212,175,55,.15),transparent);color:var(--accent);border-left:2px solid var(--accent)}
   .sic{font-size:14px;width:17px;text-align:center}
   .nbadge{margin-left:auto;background:var(--danger);color:#fff;font-size:10px;font-weight:800;padding:2px 6px;border-radius:99px;min-width:17px;text-align:center}
   .nbadge.warn{background:var(--warn);color:#0a0d14}
@@ -347,7 +348,7 @@ const STYLES = `
 
   /* MISC */
   .tag{display:inline-block;padding:2px 7px;border-radius:99px;font-size:11px;font-weight:700}
-  .tg{background:rgba(34,211,160,.1);color:var(--accent);border:1px solid rgba(34,211,160,.18)}
+  .tg{background:rgba(212,175,55,.1);color:var(--accent);border:1px solid rgba(212,175,55,.18)}
   .tb{background:rgba(14,165,233,.1);color:var(--accent2);border:1px solid rgba(14,165,233,.18)}
   .ty{background:rgba(251,191,36,.1);color:var(--warn);border:1px solid rgba(251,191,36,.18)}
   .trow{display:flex;flex-wrap:wrap;gap:4px;margin-top:4px}
@@ -2249,7 +2250,7 @@ export default function App() {
             <style>{STYLES}</style>
             <div className="lbox">
               <div className="lcard">
-                <div className="llogoic">📞</div>
+                <div className="llogoic"><img src="/logo.png" alt="Logo" style={{width:"80%",height:"80%",objectFit:"contain"}}/></div>
                 <h2 style={{fontSize:22,fontWeight:800,marginBottom:6}}>Đăng ký tài khoản</h2>
                 {regSuccess ? (
                   <div style={{textAlign:"center", padding:"20px 0"}}>
@@ -2295,8 +2296,8 @@ export default function App() {
           <style>{STYLES}</style>
           <div className="lbox">
             <div className="lcard">
-              <div className="llogoic">📞</div>
-              <h2 style={{fontSize:22,fontWeight:800,marginBottom:6}}>CallManager Pro</h2>
+              <div className="llogoic"><img src="/logo.png" alt="Logo" style={{width:"80%",height:"80%",objectFit:"contain"}}/></div>
+              <h2 style={{fontSize:22,fontWeight:800,marginBottom:6}}>Hệ Thống Dr.Nguyễn Hạ</h2>
               <p style={{fontSize:12,color:"var(--text3)",marginBottom:20}}>Đăng nhập để quản lý cuộc gọi và hiệu suất</p>
               {error && <div className="lerr">{error}</div>}
               <form onSubmit={handleLogin}>
@@ -2338,9 +2339,9 @@ export default function App() {
           <aside className="sb">
             <div className="sblogo">
               <div className="sblogow">
-                <div className="sblogoic">📞</div>
+                <div className="sblogoic"><img src="/logo.png" alt="Logo" /></div>
                 <div>
-                  <div style={{fontSize:13,fontWeight:800}}>CallManager Pro</div>
+                  <div style={{fontSize:13,fontWeight:800,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>Dr.Nguyễn Hạ</div>
                   <div style={{fontSize:10,color:"var(--text3)"}}>Quản lý cuộc gọi</div>
                 </div>
               </div>
