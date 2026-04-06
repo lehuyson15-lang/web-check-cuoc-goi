@@ -24,4 +24,13 @@ const adminMiddleware = (req, res, next) => {
   }
 };
 
-module.exports = { authMiddleware, adminMiddleware };
+const managerMiddleware = (req, res, next) => {
+  if (req.user && (req.user.role === 'ADMIN' || req.user.role === 'MANAGER')) {
+    next();
+  } else {
+    res.status(403).json({ message: 'Access denied, manager or admin only' });
+  }
+};
+
+module.exports = { authMiddleware, adminMiddleware, managerMiddleware };
+

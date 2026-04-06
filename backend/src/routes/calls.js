@@ -28,7 +28,7 @@ router.post('/upload', authMiddleware, upload.single('audio'), async (req, res) 
     console.log('[Upload] Received request:', req.body);
     console.log('[Upload] File:', req.file);
 
-    const { customerPhone, direction, serviceType, result, calledAt, notes } = req.body;
+    const { customerPhone, direction, serviceType, numberType, gender, result, calledAt, notes } = req.body;
     const file = req.file;
 
     if (!file) {
@@ -46,6 +46,8 @@ router.post('/upload', authMiddleware, upload.single('audio'), async (req, res) 
         durationSeconds: 0,
         calledAt: new Date(calledAt),
         serviceType,
+        numberType,
+        gender,
         result: result || 'PENDING',
         notes,
         audioUrl: file.path, 
@@ -67,7 +69,7 @@ router.post('/upload', authMiddleware, upload.single('audio'), async (req, res) 
 // Create call (manual log)
 router.post('/manual', authMiddleware, upload.single('audio'), async (req, res) => {
   try {
-    const { customerPhone, customerName, direction, serviceType, result, calledAt, durationSeconds, notes, assignedToId } = req.body;
+    const { customerPhone, customerName, direction, serviceType, numberType, gender, result, calledAt, durationSeconds, notes, assignedToId } = req.body;
     const file = req.file;
 
     const call = await prisma.call.create({
@@ -80,6 +82,8 @@ router.post('/manual', authMiddleware, upload.single('audio'), async (req, res) 
         durationSeconds: parseInt(durationSeconds) || 0,
         calledAt: new Date(calledAt),
         serviceType,
+        numberType,
+        gender,
         result: result || 'COMPLETED',
         notes,
         audioUrl: file ? file.path : null,

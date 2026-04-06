@@ -8,26 +8,28 @@ datasource db {
 }
 
 model User {
-  id                      String         @id @default(uuid())
+  id                      String              @id @default(uuid())
   name                    String
-  email                   String         @unique
+  email                   String              @unique
   password                String
-  role                    Role           @default(USER)
+  role                    Role                @default(USER)
   extensionVoip           String?
-  createdAt               DateTime       @default(now())
-  updatedAt               DateTime       @updatedAt
+  createdAt               DateTime            @default(now())
+  updatedAt               DateTime            @updatedAt
   address                 String?
   department              String?
   emergencyContact        String?
   gender                  String?
-  joinDate                DateTime?      @default(now())
+  joinDate                DateTime?           @default(now())
   phoneNumber             String?
-  status                  String?        @default("online")
-  targetCallsPerDay       Int?           @default(50)
-  targetConversionsPerDay Int?           @default(5)
+  status                  String?             @default("online")
+  targetCallsPerDay       Int?                @default(50)
+  targetConversionsPerDay Int?                @default(5)
   calls                   Call[]
   leads                   Lead[]
   notifications           Notification[]
+  dispatchMemberships     DispatchMember[]
+  dispatches              Dispatch[]
 
   @@map("users")
 }
@@ -48,6 +50,8 @@ model Call {
   createdAt         DateTime            @default(now())
   updatedAt         DateTime            @updatedAt
   customerName      String?
+  numberType        String?
+  gender            String?
   recallNotified30d Boolean             @default(false)
   recallNotified3d  Boolean             @default(false)
   recallNotified7d  Boolean             @default(false)
@@ -110,8 +114,56 @@ model Notification {
   @@map("notifications")
 }
 
+model DispatchQueue {
+  id           String           @id @default(uuid())
+  name         String           @default("default")
+  currentIndex Int              @default(0)
+  isActive     Boolean          @default(true)
+  createdAt    DateTime         @default(now())
+  updatedAt    DateTime         @updatedAt
+  members      DispatchMember[]
+  dispatches   Dispatch[]
+
+  @@map("dispatch_queues")
+}
+
+model DispatchMember {
+  id        String        @id @default(uuid())
+  queueId   String
+  userId    String
+  sortOrder Int           @default(0)
+  isActive  Boolean       @default(true)
+  createdAt DateTime      @default(now())
+  queue     DispatchQueue @relation(fields: [queueId], references: [id], onDelete: Cascade)
+  user      User          @relation(fields: [userId], references: [id])
+
+  @@unique([queueId, userId])
+  @@map("dispatch_members")
+}
+
+model Dispatch {
+  id            String        @id @default(uuid())
+  queueId       String
+  customerPhone String
+  customerName  String?
+  source        String?
+  assignedToId  String
+  status        String        @default("PENDING")
+  note          String?
+  slaMinutes    Int           @default(15)
+  slaDeadline   DateTime
+  assignedAt    DateTime      @default(now())
+  createdAt     DateTime      @default(now())
+  updatedAt     DateTime      @updatedAt
+  queue         DispatchQueue @relation(fields: [queueId], references: [id])
+  assignedTo    User          @relation(fields: [assignedToId], references: [id])
+
+  @@map("dispatches")
+}
+
 enum Role {
   ADMIN
+  MANAGER
   USER
 }
 

@@ -27,6 +27,7 @@ const reportRoutes = require('./routes/reports');
 const webhookRoutes = require('./routes/webhooks');
 const leadRoutes = require('./routes/leads');
 const notificationRoutes = require('./routes/notifications');
+const dispatchRoutes = require('./routes/dispatch');
 const { startSlaChecker } = require('./cron/slaChecker');
 const { startLarkReporter } = require('./cron/larkReporter');
 
@@ -36,6 +37,7 @@ app.use('/api/reports', reportRoutes);
 app.use('/api/webhooks', webhookRoutes);
 app.use('/api/leads', leadRoutes);
 app.use('/api/notifications', notificationRoutes);
+app.use('/api/dispatch', dispatchRoutes);
 
 // Start background job
 startSlaChecker();

@@ -1,5 +1,6 @@
 import React, { useState, useMemo, useEffect, useCallback, useRef } from "react";
 import axios from "axios";
+import DispatchPage from "./pages/DispatchPage";
 
 const API_BASE = "/api";
 const api = axios.create({ baseURL: API_BASE });
@@ -34,7 +35,7 @@ const ROLE_COLOR = { admin:"#a78bfa", manager:"#0ea5e9", employee:"#22d3a0" };
 const ROLE_ICON  = { admin:"👑", manager:"🧑💼", employee:"👤" };
 const STATUS_COLOR = { online:"#22d3a0", busy:"#f59e0b", offline:"#6b7280", pending:"#f87171" };
 const STATUS_LABEL = { online:"Trực tuyến", busy:"Đang bận", offline:"Offline", pending:"Chờ duyệt" };
-const SOURCES = ["Facebook Ads","Zalo OA","Website","Fanpage BSHL","Fanpage DrBody","Referral"];
+const SOURCES = ["Facebook Ads","Bác Sĩ","Khách riêng","Trợ lý Bác Sĩ","Nick phụ Bác Sĩ","Seeding","Cộng Tác Viên","Hotline","Tiktok","Instagram"];
 const DEFAULT_LIMIT = 15;
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -524,7 +525,7 @@ const TR = ({ text }) => (
 
 const CallLogModal = ({ employees, onClose, onSave, sessionLogs, addToast }) => {
   const [form, setForm] = useState({
-    direction: "INBOUND", phone: "", name: "", service: "", empId: "", date: new Date().toISOString().slice(0,16), durM: "0", durS: "0", notes: ""
+    direction: "INBOUND", phone: "", name: "", service: "", numberType: "", gender: "", empId: "", date: new Date().toISOString().slice(0,16), durM: "0", durS: "0", notes: ""
   });
   const [audioFile, setAudioFile] = useState(null);
   const [loading, setLoading] = useState(false);
@@ -539,6 +540,8 @@ const CallLogModal = ({ employees, onClose, onSave, sessionLogs, addToast }) => 
       fd.append("customerName", form.name);
       fd.append("direction", form.direction);
       fd.append("serviceType", form.service);
+      fd.append("numberType", form.numberType);
+      fd.append("gender", form.gender);
       fd.append("assignedToId", form.empId);
       fd.append("calledAt", form.date);
       fd.append("durationSeconds", durSec);
@@ -575,7 +578,27 @@ const CallLogModal = ({ employees, onClose, onSave, sessionLogs, addToast }) => 
             <div className="fgrid" style={{display:"grid", gridTemplateColumns:"1fr 1fr", gap:15}}>
               <div className="fg" style={{display:"flex", flexDirection:"column", gap:6}}><label style={{fontSize:11, color:"var(--text3)", fontWeight:700}}>SỐ ĐIỆN THOẠI</label><input required className="linp" value={form.phone} onChange={e=>setForm({...form,phone:e.target.value})} style={{background:"rgba(255,255,255,0.05)", border:"1px solid rgba(255,255,255,0.1)", borderRadius:8, padding:"10px 14px", color:"#fff"}} /></div>
               <div className="fg" style={{display:"flex", flexDirection:"column", gap:6}}><label style={{fontSize:11, color:"var(--text3)", fontWeight:700}}>TÊN KHÁCH HÀNG</label><input className="linp" value={form.name} onChange={e=>setForm({...form,name:e.target.value})} style={{background:"rgba(255,255,255,0.05)", border:"1px solid rgba(255,255,255,0.1)", borderRadius:8, padding:"10px 14px", color:"#fff"}} /></div>
-              <div className="fg" style={{display:"flex", flexDirection:"column", gap:6}}><label style={{fontSize:11, color:"var(--text3)", fontWeight:700}}>DỊCH VỤ QUAN TÂM</label><input className="linp" value={form.service} onChange={e=>setForm({...form,service:e.target.value})} style={{background:"rgba(255,255,255,0.05)", border:"1px solid rgba(255,255,255,0.1)", borderRadius:8, padding:"10px 14px", color:"#fff"}} /></div>
+              <div className="fg" style={{display:"flex", flexDirection:"column", gap:6}}>
+                <label style={{fontSize:11, color:"var(--text3)", fontWeight:700}}>DỊCH VỤ QUAN TÂM</label>
+                <select className="sel2" value={form.service} onChange={e=>setForm({...form,service:e.target.value})} style={{background:"rgba(255,255,255,0.05)", border:"1px solid rgba(255,255,255,0.1)", borderRadius:8, padding:"10px 14px", color:"#fff", width:"100%"}}>
+                  <option value="" style={{background:"#1a1f2b"}}>-- Chọn --</option>
+                  {['Bụng', 'Nâng Ngực', 'Tay', 'Nọng', 'Cấy Mỡ', 'Cô Bé'].map(s=><option key={s} value={s} style={{background:"#1a1f2b"}}>{s}</option>)}
+                </select>
+              </div>
+              <div className="fg" style={{display:"flex", flexDirection:"column", gap:6}}>
+                <label style={{fontSize:11, color:"var(--text3)", fontWeight:700}}>SỐ TRÙNG / LOẠI</label>
+                <select className="sel2" value={form.numberType} onChange={e=>setForm({...form,numberType:e.target.value})} style={{background:"rgba(255,255,255,0.05)", border:"1px solid rgba(255,255,255,0.1)", borderRadius:8, padding:"10px 14px", color:"#fff", width:"100%"}}>
+                  <option value="" style={{background:"#1a1f2b"}}>-- Chọn --</option>
+                  {['Số trùng', 'Số trùng nhập mới', 'Bệnh lý theo dõi', 'Mới sinh'].map(s=><option key={s} value={s} style={{background:"#1a1f2b"}}>{s}</option>)}
+                </select>
+              </div>
+              <div className="fg" style={{display:"flex", flexDirection:"column", gap:6}}>
+                <label style={{fontSize:11, color:"var(--text3)", fontWeight:700}}>GIỚI TÍNH</label>
+                <select className="sel2" value={form.gender} onChange={e=>setForm({...form,gender:e.target.value})} style={{background:"rgba(255,255,255,0.05)", border:"1px solid rgba(255,255,255,0.1)", borderRadius:8, padding:"10px 14px", color:"#fff", width:"100%"}}>
+                  <option value="" style={{background:"#1a1f2b"}}>-- Chọn --</option>
+                  {['Nam', 'Tây', 'Việt Kiều'].map(s=><option key={s} value={s} style={{background:"#1a1f2b"}}>{s}</option>)}
+                </select>
+              </div>
               <div className="fg" style={{display:"flex", flexDirection:"column", gap:6}}><label style={{fontSize:11, color:"var(--text3)", fontWeight:700}}>NHÂN VIÊN PHỤ TRÁCH</label>
                 <select className="sel2" value={form.empId} onChange={e=>setForm({...form,empId:e.target.value})} required style={{background:"rgba(255,255,255,0.05)", border:"1px solid rgba(255,255,255,0.1)", borderRadius:8, padding:"10px 14px", color:"#fff", width:"100%"}}>
                   <option value="" style={{background:"#1a1f2b"}}>-- Chọn nhân viên --</option>
@@ -1478,7 +1501,7 @@ const AllCallsPage = ({ calls, employees, openTr, setOpenTr, transcripts, onAdd,
       </div>
       <div className="tcard">
         <table>
-          <thead><tr><th>SĐT</th><th>Tên khách</th><th>Nhân viên</th><th>Ngày / Giờ</th><th>Thời gian</th><th>Ghi chú</th><th>Hành động</th></tr></thead>
+          <thead><tr><th>SĐT</th><th>Tên khách</th><th>Nhân viên</th><th>Ngày / Giờ</th><th>Thời gian</th><th>Dịch vụ</th><th>Loại số</th><th>Giới tính</th><th>Ghi chú</th><th>Hành động</th></tr></thead>
           <tbody>
             {filteredCalls.map(c => {
               const emp = employees.find(e => e.id === c.empId);
@@ -1490,6 +1513,9 @@ const AllCallsPage = ({ calls, employees, openTr, setOpenTr, transcripts, onAdd,
                     <td>{emp ? emp.name : "—"}</td>
                     <td>{c.date} {c.time}</td>
                     <td className="mono">{c.duration}</td>
+                    <td><span style={{fontSize:11, padding:"2px 6px", background:"rgba(255,255,255,0.05)", borderRadius:4}}>{c.serviceType || "—"}</span></td>
+                    <td><span style={{fontSize:11, padding:"2px 6px", background:"rgba(255,255,255,0.05)", borderRadius:4}}>{c.numberType || "—"}</span></td>
+                    <td><span style={{fontSize:11, padding:"2px 6px", background:"rgba(255,255,255,0.05)", borderRadius:4}}>{c.gender || "—"}</span></td>
                     <td>
                       <p className="text-xs text-slate-500 max-w-[150px] truncate" title={c.notes}>
                         {c.notes || <span className="text-slate-300 italic">Trống</span>}
@@ -1525,7 +1551,7 @@ const AllCallsPage = ({ calls, employees, openTr, setOpenTr, transcripts, onAdd,
                   </tr>
                   {openTr === c.id && (
                     <tr>
-                      <td colSpan="7" style={{ padding: "0 12px 12px" }}>
+                      <td colSpan="10" style={{ padding: "0 12px 12px" }}>
                         {transcripts[c.id] ? <TR text={transcripts[c.id]} /> : <div className="trpanel" style={{ color: "var(--text3)" }}>⚠ Đang xử lý.</div>}
                       </td>
                     </tr>
@@ -2119,11 +2145,11 @@ export default function App() {
         });
         const { token, user } = res.data;
         localStorage.setItem("token", token);
-        const mappedRole = user.role === "ADMIN" ? "admin" : "employee";
+        const mappedRole = user.role === "ADMIN" ? "admin" : user.role === "MANAGER" ? "manager" : "employee";
         const sessionUser = { ...user, role: mappedRole, avatar: user.name.substring(0,2).toUpperCase() };
         localStorage.setItem("session", JSON.stringify(sessionUser));
         setSession(sessionUser);
-        if (mappedRole === "admin") setPage("dashboard");
+        if (mappedRole === "admin" || mappedRole === "manager") setPage("dashboard");
         else setPage("my_kpi");
       } catch (err) {
         setError(err.response?.data?.message || "Đăng nhập thất bại");
@@ -2175,7 +2201,7 @@ export default function App() {
       api.post("/auth/login", { email: u, password: p })
         .then(res => {
           const { token, user } = res.data;
-          const mappedRole = user.role.toLowerCase() === "admin" ? "admin" : (user.role.toLowerCase() === "manager" ? "manager" : "employee");
+          const mappedRole = user.role === "ADMIN" ? "admin" : user.role === "MANAGER" ? "manager" : "employee";
           const sessionUser = { ...user, role: mappedRole };
           localStorage.setItem("token", token);
           localStorage.setItem("session", JSON.stringify(sessionUser));
@@ -2347,6 +2373,7 @@ export default function App() {
       { id: "my_tasks", lb: "Nhiệm vụ", ic: "📋", show: role === "employee" },
       { id: "my_calls", lb: "Cuộc gọi của tôi", ic: "📞", show: role === "employee" },
       null,
+      { id: "dispatch", lb: "Điều phối SĐT", ic: "📲", show: can("dispatchPhone") },
       { id: "all_calls", lb: "Tất cả cuộc gọi", ic: "🌍", show: can("viewAllCalls") },
       { id: "employees", lb: "Quản lý nhân viên", ic: "👥", show: can("viewAllEmployees") },
       { id: "reports", lb: "Báo cáo", ic: "📈", show: can("viewReports") },
@@ -2425,6 +2452,7 @@ export default function App() {
             {page === "my_tasks" && <MyTasksPage account={session} assignments={assignments} employees={employees} calls={calls} onUpdateTask={(id, data) => setAssignments(p => p.map(a => a.id === id ? {...a, ...data} : a))} />}
             {page === "my_calls" && <MyCallsPage account={session} calls={calls} openTr={openTr} setOpenTr={setOpenTr} transcripts={transcripts} setEditCall={setEditCall} can={can} onDeleteCall={setDeleteCallId} />}
             
+            {!can("dispatchPhone") && page === "dispatch" ? <AccessDenied requiredRole="manager" /> : page === "dispatch" && <DispatchPage api={api} addToast={addToast} can={can} />}
             {!can("viewAllCalls") && page === "all_calls" ? <AccessDenied requiredRole="manager" /> : page === "all_calls" && <AllCallsPage calls={calls} employees={employees} openTr={openTr} setOpenTr={setOpenTr} transcripts={transcripts} onAdd={()=>setShowCallLog(true)} setEditCall={setEditCall} can={can} onDeleteCall={setDeleteCallId} />}
             {!can("viewAllEmployees") && page === "employees" ? <AccessDenied requiredRole="manager" /> : page === "employees" && <EmpPage employees={employees} allCalls={calls} onSel={setSelEmp} onAdd={()=>setShowEmpWizard(true)} onApprove={async(emp) => {
               try { await api.patch(`/auth/users/${emp.id}/status`, {status:'online'}); addToast("called", `Đã phê duyệt tài khoản ${emp.name}`); fetchAllData(); } catch(e){ addToast('overdue', "Lỗi duyệt: " + (e.response?.data?.message || e.message)); }
