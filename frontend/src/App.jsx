@@ -60,7 +60,16 @@ const CAN_LABELS = {
   dispatchPhone:    "Điều phối cuộc gọi",
   manageAccounts:   "Quản lý tài khoản & Phân quyền",
   editCustomer:     "Chỉnh sửa hồ sơ KH",
-  deleteCustomer:   "Xoá hồ sơ KH (Chỉ Admin)"
+};
+
+const CUSTOMER_STATUS_COLORS = {
+  "KO NGHE MÁY": "rgba(239, 83, 80, 0.4)",
+  "ĐÃ LÀM": "rgba(66, 165, 245, 0.4)",
+  "KHÁCH ĐẶT CỌC": "rgba(255, 202, 40, 0.4)",
+  "KHÁCH OUT": "rgba(158, 158, 158, 0.4)",
+  "KHÁCH RIÊNG": "rgba(102, 187, 106, 0.4)",
+  "THAM KHẢO": "rgba(255, 167, 38, 0.4)",
+  "KHÁCH TIỀM NĂNG": "rgba(236, 64, 122, 0.4)"
 };
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -525,7 +534,7 @@ const TR = ({ text }) => (
 
 const CallLogModal = ({ employees, onClose, onSave, sessionLogs, addToast }) => {
   const [form, setForm] = useState({
-    direction: "INBOUND", phone: "", name: "", service: "", numberType: "", gender: "", empId: "", date: new Date().toISOString().slice(0,16), durM: "0", durS: "0", notes: ""
+    direction: "INBOUND", phone: "", name: "", service: "", numberType: "", gender: "", customerStatus: "", empId: "", date: new Date().toISOString().slice(0,16), durM: "0", durS: "0", notes: ""
   });
   const [audioFile, setAudioFile] = useState(null);
   const [loading, setLoading] = useState(false);
@@ -542,6 +551,7 @@ const CallLogModal = ({ employees, onClose, onSave, sessionLogs, addToast }) => 
       fd.append("serviceType", form.service);
       fd.append("numberType", form.numberType);
       fd.append("gender", form.gender);
+      fd.append("customerStatus", form.customerStatus);
       fd.append("assignedToId", form.empId);
       fd.append("calledAt", form.date);
       fd.append("durationSeconds", durSec);
@@ -597,6 +607,13 @@ const CallLogModal = ({ employees, onClose, onSave, sessionLogs, addToast }) => 
                 <select className="sel2" value={form.gender} onChange={e=>setForm({...form,gender:e.target.value})} style={{background:"rgba(255,255,255,0.05)", border:"1px solid rgba(255,255,255,0.1)", borderRadius:8, padding:"10px 14px", color:"#fff", width:"100%"}}>
                   <option value="" style={{background:"#1a1f2b"}}>-- Chọn --</option>
                   {['Nam', 'Tây', 'Việt Kiều'].map(s=><option key={s} value={s} style={{background:"#1a1f2b"}}>{s}</option>)}
+                </select>
+              </div>
+              <div className="fg" style={{display:"flex", flexDirection:"column", gap:6}}>
+                <label style={{fontSize:11, color:"var(--text3)", fontWeight:700}}>TRẠNG THÁI KHÁCH HÀNG</label>
+                <select className="sel2" value={form.customerStatus} onChange={e=>setForm({...form,customerStatus:e.target.value})} style={{background:"rgba(255,255,255,0.05)", border:"1px solid rgba(255,255,255,0.1)", borderRadius:8, padding:"10px 14px", color:"#fff", width:"100%"}}>
+                  <option value="" style={{background:"#1a1f2b"}}>-- Chọn --</option>
+                  {Object.keys(CUSTOMER_STATUS_COLORS).map(s => <option key={s} value={s} style={{background:"#1a1f2b"}}>{s}</option>)}
                 </select>
               </div>
               <div className="fg" style={{display:"flex", flexDirection:"column", gap:6}}><label style={{fontSize:11, color:"var(--text3)", fontWeight:700}}>NHÂN VIÊN PHỤ TRÁCH</label>
@@ -832,6 +849,7 @@ const EditAssignModal = ({ a, employees, onSave, onClose }) => {
 // ── Edit Call ─────────────────────────────────────────────────────────────────
 const EditCallModal = ({ call, employees, onSave, onClose, addToast }) => {
   const [note, setNote] = useState(call.note || call.notes || "");
+  const [customerStatus, setCustomerStatus] = useState(call.customerStatus || "");
   const [saving, setSaving] = useState(false);
   const emp = employees.find(e=>e.id===call.empId);
 
@@ -840,9 +858,9 @@ const EditCallModal = ({ call, employees, onSave, onClose, addToast }) => {
     try {
       // If it's a real call from backend (has DB id format), update it
       if (call.id && !call.id.startsWith("call_")) {
-        await api.patch(`/calls/${call.id}`, { notes: note });
+        await api.patch(`/calls/${call.id}`, { notes: note, customerStatus });
       }
-      onSave({ note, status: call.status });
+      onSave({ note, status: call.status, customerStatus });
     } catch (error) {
       console.error("Failed to save note", error);
       addToast("overdue", "Lỗi khi lưu ghi chú");
@@ -864,6 +882,12 @@ const EditCallModal = ({ call, employees, onSave, onClose, addToast }) => {
             {[["SĐT",call.phone],["Ngày",call.date],["Giờ",call.time],["TG gọi",call.duration],["NV phụ trách",emp?.name||"—"]].map(([k,v])=>(
               <div className="irow" key={k}><span className="ik">{k}</span><span className="iv">{v}</span></div>
             ))}
+          </div>
+          <div className="fg"><label className="flbl">Trạng thái khách hàng</label>
+            <select className="fsel" value={customerStatus} onChange={e=>setCustomerStatus(e.target.value)}>
+              <option value="">-- Chưa phân loại --</option>
+              {Object.keys(CUSTOMER_STATUS_COLORS).map(s => <option key={s} value={s}>{s}</option>)}
+            </select>
           </div>
           <div className="fg"><label className="flbl">Ghi chú cuộc gọi</label><textarea className="ftextarea" value={note} onChange={e=>setNote(e.target.value)} placeholder="Nội dung tư vấn, kết quả, hành động tiếp theo..."/></div>
         </div>
@@ -1505,9 +1529,10 @@ const AllCallsPage = ({ calls, employees, openTr, setOpenTr, transcripts, onAdd,
           <tbody>
             {filteredCalls.map(c => {
               const emp = employees.find(e => e.id === c.empId);
+              const bg = CUSTOMER_STATUS_COLORS[c.customerStatus] || "transparent";
               return (
                 <React.Fragment key={c.id}>
-                  <tr>
+                  <tr style={{ background: bg }}>
                     <td className="cph">{c.phone}</td>
                     <td style={{fontSize:12}}>{c.customerName || <span style={{color:"var(--text3)",fontStyle:"italic"}}>—</span>}</td>
                     <td>{emp ? emp.name : "—"}</td>
@@ -2470,8 +2495,9 @@ export default function App() {
         {showCallLog && <CallLogModal employees={employees} onClose={()=>setShowCallLog(false)} onSave={handleNewCall} sessionLogs={sessionLogs} addToast={addToast} />}
         {showEmpWizard && <EmployeeWizard onClose={()=>setShowEmpWizard(false)} onSave={handleNewEmp} addToast={addToast} />}
         {editCall && <EditCallModal call={editCall} employees={employees} onClose={() => setEditCall(null)} addToast={addToast} onSave={async (updates) => {
-          setCalls(prev => prev.map(c => c.id === editCall.id ? { ...c, notes: updates.note, note: updates.note, status: updates.status } : c));
+          setCalls(prev => prev.map(c => c.id === editCall.id ? { ...c, notes: updates.note, note: updates.note, status: updates.status, customerStatus: updates.customerStatus } : c));
           setEditCall(null);
+          addToast("called", "Cập nhật thành công!");
         }} />}
       </>
     );

@@ -52,6 +52,7 @@ model Call {
   customerName      String?
   numberType        String?
   gender            String?
+  customerStatus    String?
   recallNotified30d Boolean             @default(false)
   recallNotified3d  Boolean             @default(false)
   recallNotified7d  Boolean             @default(false)

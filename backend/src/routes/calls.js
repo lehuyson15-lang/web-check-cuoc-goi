@@ -28,7 +28,7 @@ router.post('/upload', authMiddleware, upload.single('audio'), async (req, res) 
     console.log('[Upload] Received request:', req.body);
     console.log('[Upload] File:', req.file);
 
-    const { customerPhone, direction, serviceType, numberType, gender, result, calledAt, notes } = req.body;
+    const { customerPhone, direction, serviceType, numberType, gender, customerStatus, result, calledAt, notes } = req.body;
     const file = req.file;
 
     if (!file) {
@@ -48,6 +48,7 @@ router.post('/upload', authMiddleware, upload.single('audio'), async (req, res) 
         serviceType,
         numberType,
         gender,
+        customerStatus,
         result: result || 'PENDING',
         notes,
         audioUrl: file.path, 
@@ -69,7 +70,7 @@ router.post('/upload', authMiddleware, upload.single('audio'), async (req, res) 
 // Create call (manual log)
 router.post('/manual', authMiddleware, upload.single('audio'), async (req, res) => {
   try {
-    const { customerPhone, customerName, direction, serviceType, numberType, gender, result, calledAt, durationSeconds, notes, assignedToId } = req.body;
+    const { customerPhone, customerName, direction, serviceType, numberType, gender, customerStatus, result, calledAt, durationSeconds, notes, assignedToId } = req.body;
     const file = req.file;
 
     const call = await prisma.call.create({
@@ -84,6 +85,7 @@ router.post('/manual', authMiddleware, upload.single('audio'), async (req, res) 
         serviceType,
         numberType,
         gender,
+        customerStatus,
         result: result || 'COMPLETED',
         notes,
         audioUrl: file ? file.path : null,
@@ -167,7 +169,7 @@ router.get('/:id', authMiddleware, async (req, res) => {
 router.patch('/:id', authMiddleware, async (req, res) => {
   try {
     const { id } = req.params;
-    const { notes } = req.body;
+    const { notes, customerStatus } = req.body;
 
     const call = await prisma.call.findUnique({ where: { id } });
     if (!call) return res.status(404).json({ message: 'Call not found' });
@@ -176,9 +178,13 @@ router.patch('/:id', authMiddleware, async (req, res) => {
       return res.status(403).json({ message: 'Access denied' });
     }
 
+    const dataToUpdate = {};
+    if (notes !== undefined) dataToUpdate.notes = notes;
+    if (customerStatus !== undefined) dataToUpdate.customerStatus = customerStatus;
+
     const updatedCall = await prisma.call.update({
       where: { id },
-      data: { notes }
+      data: dataToUpdate
     });
 
     res.json(updatedCall);
