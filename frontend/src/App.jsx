@@ -484,6 +484,30 @@ const STYLES = `
 
   .two-col-layout{display:grid;grid-template-columns:1fr 1fr;gap:14px}
   @media(max-width:900px){.kpi-big-grid{grid-template-columns:repeat(2,1fr)}.two-col-layout{grid-template-columns:1fr}}
+  @media(max-width:768px){
+    .sgrid{grid-template-columns:repeat(2,1fr)}
+    .charts2, .prow, .p2col{grid-template-columns:1fr}
+    .kgrid{grid-template-columns:repeat(2,1fr)}
+    .sb{position:fixed;top:0;left:-260px;width:240px;height:100vh;z-index:999;transition:all .3s ease;box-shadow:0 0 20px rgba(0,0,0,0.5)}
+    .sb.open{left:0}
+    .sb-overlay{position:fixed;inset:0;background:rgba(0,0,0,0.6);z-index:998;animation:fi .3s ease}
+    .menu-btn{display:flex;align-items:center;justify-content:center;background:none;border:none;color:var(--text);font-size:24px;cursor:pointer;padding:4px}
+    .content{padding:16px 12px}
+    .topbar{padding:11px 12px;gap:8px}
+    .main{width:100vw;overflow-x:hidden}
+    .tcard, .rep-pivot-wrap, .panel{width:100%;overflow-x:auto;-webkit-overflow-scrolling:touch}
+    .table-wrap{min-width:700px}
+    .disp-layout{grid-template-columns:1fr}
+    .fbar{flex-direction:column;align-items:flex-start}
+    .fbar .qbtns{margin-left:0;flex-wrap:wrap;margin-top:6px}
+    .fgrid, .kpi-big-grid {grid-template-columns: 1fr !important}
+    .modal {margin:10px; width:calc(100% - 20px) !important}
+    .mov .modal {flex-direction:column !important; max-height:95vh !important; overflow-y:auto !important}
+    .mcard {width: 100% !important; max-width: 100% !important}
+  }
+  @media(min-width:769px){
+    .menu-btn, .sb-overlay{display:none}
+  }
 `;
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -2132,6 +2156,7 @@ export default function App() {
     const [showCallLog, setShowCallLog] = useState(false);
     const [showEmpWizard, setShowEmpWizard] = useState(false);
     const [sessionLogs, setSessionLogs] = useState([]);
+    const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
 
     // State
     const [accounts, setAccounts] = useState([]);
@@ -2418,7 +2443,8 @@ export default function App() {
       <>
         <style>{STYLES}</style>
         <div className="app">
-          <aside className="sb">
+          {isMobileMenuOpen && <div className="sb-overlay" onClick={() => setIsMobileMenuOpen(false)}></div>}
+          <aside className={`sb ${isMobileMenuOpen ? "open" : ""}`}>
             <div className="sblogo">
               <div className="sblogow">
                 <div className="sblogoic"><img src="/logo.png" alt="Logo" /></div>
@@ -2456,6 +2482,7 @@ export default function App() {
               {toasts.map(t => <ToastItem key={t.id} t={t} onDismiss={removeToast} />)}
             </div>
             <div className="topbar">
+              <button className="menu-btn" onClick={() => setIsMobileMenuOpen(p => !p)}>☰</button>
               <div className="ptitle">{NAV.find(n => n && n.id === page)?.lb || "Tổng quan"}</div>
               {role === 'admin' && (
                 <button 
