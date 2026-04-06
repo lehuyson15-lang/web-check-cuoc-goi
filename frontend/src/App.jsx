@@ -1449,6 +1449,7 @@ const MyCallsPage = ({ account, calls, openTr, setOpenTr, transcripts, setEditCa
 
 const AllCallsPage = ({ calls, employees, openTr, setOpenTr, transcripts, onAdd, setEditCall, can, onDeleteCall }) => {
   const [filterEmpId, setFilterEmpId] = useState("all");
+  const [filterCustomerStatus, setFilterCustomerStatus] = useState("all");
   const [searchText, setSearchText] = useState("");
   const [importing, setImporting] = useState(false);
   const [importMsg, setImportMsg] = useState(null);
@@ -1457,6 +1458,7 @@ const AllCallsPage = ({ calls, employees, openTr, setOpenTr, transcripts, onAdd,
   const filteredCalls = useMemo(() => {
     let result = calls;
     if (filterEmpId !== "all") result = result.filter(c => c.empId === filterEmpId);
+    if (filterCustomerStatus !== "all") result = result.filter(c => c.customerStatus === filterCustomerStatus);
     if (searchText.trim()) {
       const q = searchText.trim().toLowerCase();
       result = result.filter(c =>
@@ -1466,7 +1468,7 @@ const AllCallsPage = ({ calls, employees, openTr, setOpenTr, transcripts, onAdd,
       );
     }
     return result;
-  }, [calls, filterEmpId, searchText]);
+  }, [calls, filterEmpId, filterCustomerStatus, searchText]);
 
   const handleImportCSV = async (e) => {
     const file = e.target.files?.[0];
@@ -1498,6 +1500,10 @@ const AllCallsPage = ({ calls, employees, openTr, setOpenTr, transcripts, onAdd,
             <option value="all">👥 Tất cả nhân viên</option>
             {employees.map(e=><option key={e.id} value={e.id}>{e.name}</option>)}
           </select>
+          <select className="sel2" value={filterCustomerStatus} onChange={e=>setFilterCustomerStatus(e.target.value)} style={{minWidth:160,padding:"6px 10px",fontSize:12}}>
+            <option value="all">📁 Tất cả trạng thái</option>
+            {Object.keys(CUSTOMER_STATUS_COLORS).map(s=><option key={s} value={s}>{s}</option>)}
+          </select>
           <button className="lbtn" style={{width:"auto", padding:"6px 12px", fontSize:12}} onClick={onAdd}>+ Thêm cuộc gọi</button>
           <input type="file" ref={fileInputRef} accept=".csv,.txt,.xlsx,.xls" style={{display:"none"}} onChange={handleImportCSV} />
           <button className="lbtn" style={{width:"auto", padding:"6px 12px", fontSize:12, background:"var(--accent2)"}} onClick={() => fileInputRef.current?.click()} disabled={importing}>
@@ -1525,7 +1531,7 @@ const AllCallsPage = ({ calls, employees, openTr, setOpenTr, transcripts, onAdd,
       </div>
       <div className="tcard">
         <table>
-          <thead><tr><th>SĐT</th><th>Tên khách</th><th>Nhân viên</th><th>Ngày / Giờ</th><th>Thời gian</th><th>Dịch vụ</th><th>Loại số</th><th>Giới tính</th><th>Ghi chú</th><th>Hành động</th></tr></thead>
+          <thead><tr><th>SĐT</th><th>Tên khách</th><th>Nhân viên</th><th>Ngày / Giờ</th><th>Thời gian</th><th>Dịch vụ</th><th>Loại số</th><th>Giới tính</th><th>Trạng thái</th><th>Ghi chú</th><th>Hành động</th></tr></thead>
           <tbody>
             {filteredCalls.map(c => {
               const emp = employees.find(e => e.id === c.empId);
@@ -1541,6 +1547,7 @@ const AllCallsPage = ({ calls, employees, openTr, setOpenTr, transcripts, onAdd,
                     <td><span style={{fontSize:11, padding:"2px 6px", background:"rgba(255,255,255,0.05)", borderRadius:4}}>{c.serviceType || "—"}</span></td>
                     <td><span style={{fontSize:11, padding:"2px 6px", background:"rgba(255,255,255,0.05)", borderRadius:4}}>{c.numberType || "—"}</span></td>
                     <td><span style={{fontSize:11, padding:"2px 6px", background:"rgba(255,255,255,0.05)", borderRadius:4}}>{c.gender || "—"}</span></td>
+                    <td style={{fontSize:12, fontWeight:700}}>{c.customerStatus || "—"}</td>
                     <td>
                       <p className="text-xs text-slate-500 max-w-[150px] truncate" title={c.notes}>
                         {c.notes || <span className="text-slate-300 italic">Trống</span>}
@@ -1576,7 +1583,7 @@ const AllCallsPage = ({ calls, employees, openTr, setOpenTr, transcripts, onAdd,
                   </tr>
                   {openTr === c.id && (
                     <tr>
-                      <td colSpan="10" style={{ padding: "0 12px 12px" }}>
+                      <td colSpan="11" style={{ padding: "0 12px 12px" }}>
                         {transcripts[c.id] ? <TR text={transcripts[c.id]} /> : <div className="trpanel" style={{ color: "var(--text3)" }}>⚠ Đang xử lý.</div>}
                       </td>
                     </tr>
