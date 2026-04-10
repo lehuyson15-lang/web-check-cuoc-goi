@@ -781,6 +781,100 @@ const EmployeeWizard = ({ onClose, onSave, addToast }) => {
   );
 };
 
+const ProfileModal = ({ session, onClose, onSave, addToast }) => {
+  const [tab, setTab] = useState("general");
+  const [form, setForm] = useState({ name: session?.name || "", phone: session?.phoneNumber || "", email: session?.email || "", gender: session?.gender || "Nam" });
+  const [passForm, setPassForm] = useState({ oldPassword: "", newPassword: "", confirmPassword: "" });
+  const [avatarObj, setAvatarObj] = useState(null);
+  const [loading, setLoading] = useState(false);
+
+  const subGen = async (e) => {
+    e.preventDefault();
+    setLoading(true);
+    try {
+      const fd = new FormData();
+      fd.append("name", form.name);
+      fd.append("phoneNumber", form.phone);
+      fd.append("email", form.email);
+      fd.append("gender", form.gender);
+      if (avatarObj) fd.append("avatar", avatarObj);
+      const res = await api.put("/auth/profile", fd, { headers: { "Content-Type": "multipart/form-data" } });
+      onSave(res.data);
+      addToast("called", "Cập nhật hồ sơ thành công");
+    } catch (err) {
+      addToast("overdue", "Lỗi: " + (err.response?.data?.message || err.message));
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const subPass = async (e) => {
+    e.preventDefault();
+    if (passForm.newPassword !== passForm.confirmPassword) return addToast("overdue", "Mật khẩu mới không khớp");
+    setLoading(true);
+    try {
+      await api.put("/auth/change-password", { oldPassword: passForm.oldPassword, newPassword: passForm.newPassword });
+      addToast("called", "Đổi mật khẩu thành công");
+      setPassForm({oldPassword:"",newPassword:"",confirmPassword:""});
+    } catch(err) {
+      addToast("overdue", "Lỗi: " + (err.response?.data?.message || err.message));
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const avatarUrl = avatarObj ? URL.createObjectURL(avatarObj) : (session?.avatar && session.avatar.length > 2 ? `/${session.avatar}` : null);
+
+  return (
+    <div className="mov" onClick={e=>e.target.className==="mov"&&onClose()}>
+      <div className="modal sm">
+        <div className="mhead">
+          <div className="mav" style={{backgroundImage: avatarUrl ? `url(${avatarUrl})` : 'none', backgroundSize:'cover', backgroundPosition:'center'}}>
+            {!avatarUrl ? session?.avatar : ""}
+          </div>
+          <div><div style={{fontSize:16,fontWeight:800}}>Tài khoản của tôi</div><div style={{fontSize:12,color:"var(--text2)"}}>{session?.email}</div></div>
+          <button className="mcls" onClick={onClose}>×</button>
+        </div>
+        <div className="mtabs">
+          <div className={`mtab ${tab==="general"?"on":""}`} onClick={()=>setTab("general")}>Hồ sơ cá nhân</div>
+          <div className={`mtab ${tab==="password"?"on":""}`} onClick={()=>setTab("password")}>Đổi mật khẩu</div>
+        </div>
+        <div className="mbody">
+          {tab==="general" && (
+            <form onSubmit={subGen}>
+              <div style={{display:"flex", alignItems:"center", gap:15, marginBottom:20}}>
+                <div style={{width:80,height:80,borderRadius:"50%",background:"var(--surface2)",display:"flex",alignItems:"center",justifyContent:"center",overflow:"hidden", border:"2px solid var(--accent)"}}>
+                  {avatarUrl ? <img src={avatarUrl} style={{width:"100%",height:"100%",objectFit:"cover"}} /> : <span style={{fontSize:24,color:"#fff"}}>{session?.avatar}</span>}
+                </div>
+                <div>
+                  <label style={{display:"inline-block",padding:"8px 12px",background:"var(--surface)",border:"1px solid var(--border)",borderRadius:6,cursor:"pointer",fontSize:13,fontWeight:700}}>
+                    Tải ảnh lên <input type="file" hidden accept="image/*" onChange={e=>setAvatarObj(e.target.files[0])} />
+                  </label>
+                </div>
+              </div>
+              <div className="fg"><label className="flbl">Họ và tên</label><input className="finp" value={form.name} onChange={e=>setForm({...form,name:e.target.value})} required/></div>
+              <div className="fg"><label className="flbl">Email</label><input type="email" className="finp" value={form.email} onChange={e=>setForm({...form,email:e.target.value})} required/></div>
+              <div className="fg"><label className="flbl">Số điện thoại</label><input className="finp" value={form.phone} onChange={e=>setForm({...form,phone:e.target.value})} /></div>
+              <div className="fg"><label className="flbl">Giới tính</label>
+                <select className="fsel" value={form.gender} onChange={e=>setForm({...form,gender:e.target.value})}><option>Nam</option><option>Nữ</option></select>
+              </div>
+              <button className="lbtn" type="submit" disabled={loading} style={{marginTop:10}}>{loading?"Đang lưu...":"Lưu thông tin"}</button>
+            </form>
+          )}
+          {tab==="password" && (
+            <form onSubmit={subPass}>
+              <div className="fg"><label className="flbl">Mật khẩu cũ</label><input type="password" required className="finp" value={passForm.oldPassword} onChange={e=>setPassForm({...passForm,oldPassword:e.target.value})}/></div>
+              <div className="fg"><label className="flbl">Mật khẩu mới</label><input type="password" required className="finp" value={passForm.newPassword} onChange={e=>setPassForm({...passForm,newPassword:e.target.value})}/></div>
+              <div className="fg"><label className="flbl">Xác nhận mật khẩu mới</label><input type="password" required className="finp" value={passForm.confirmPassword} onChange={e=>setPassForm({...passForm,confirmPassword:e.target.value})}/></div>
+              <button className="lbtn" type="submit" disabled={loading} style={{marginTop:10}}>{loading?"Đang thay đổi...":"Đổi mật khẩu"}</button>
+            </form>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+};
+
 const MBC = ({ data, color, title }) => {
   const max=Math.max(...data.map(d=>d.v),1);
   return<div className="bcwrap"><div className="bctitle">{title}</div><div className="bc">{data.map((d,i)=><div className="bcol" key={i}><div className="bval" style={{color}}>{d.v}</div><div className="brect" style={{height:`${Math.max((d.v/max)*85,3)}px`,background:color,opacity:.72+(i/data.length)*.27}}/><div className="blbl">{d.l}</div></div>)}</div></div>;
@@ -2155,6 +2249,7 @@ export default function App() {
     const [selEmp, setSelEmp] = useState(null);
     const [showCallLog, setShowCallLog] = useState(false);
     const [showEmpWizard, setShowEmpWizard] = useState(false);
+    const [showProfileModal, setShowProfileModal] = useState(false);
     const [sessionLogs, setSessionLogs] = useState([]);
     const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
 
@@ -2466,8 +2561,10 @@ export default function App() {
               })}
             </nav>
             <div className="sbfoot">
-              <div style={{display:"flex",alignItems:"center",gap:9,marginBottom:12}}>
-                <div className="sbuav" style={{background:ROLE_COLOR[role],color:role==="admin"?"#fff":"#0a0d14"}}>{session.avatar}</div>
+              <div style={{display:"flex",alignItems:"center",gap:9,marginBottom:12,cursor:"pointer"}} onClick={()=>setShowProfileModal(true)} title="Cập nhật tài khoản">
+                <div className="sbuav" style={{background:ROLE_COLOR[role],color:role==="admin"?"#fff":"#0a0d14", backgroundImage: session.avatar && session.avatar.length > 2 ? `url(/${session.avatar})` : 'none', backgroundSize:'cover', backgroundPosition:'center'}}>
+                  {(!session.avatar || session.avatar.length <= 2) ? session.avatar : ""}
+                </div>
                 <div style={{flex:1,minWidth:0}}>
                   <div style={{fontSize:12,fontWeight:700,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>{session.name}</div>
                   <div style={{fontSize:10,color:"var(--text3)"}}>{ROLE_LABEL[role]}</div>

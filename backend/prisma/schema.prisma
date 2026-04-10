@@ -25,6 +25,7 @@ model User {
   status                  String?             @default("online")
   targetCallsPerDay       Int?                @default(50)
   targetConversionsPerDay Int?                @default(5)
+  avatar                  String?
   calls                   Call[]
   leads                   Lead[]
   notifications           Notification[]
