@@ -5,12 +5,20 @@ const { processSTT } = require('../services/sttProcessor');
 const axios = require('axios');
 const fs = require('fs');
 const path = require('path');
+const { apiLimiter } = require('../services/securityMiddleware');
 
 const prisma = new PrismaClient();
 
 // Webhook for Stringee (or other providers)
-router.post('/stringee', async (req, res) => {
+router.post('/stringee', apiLimiter, async (req, res) => {
   try {
+    // Basic signature check
+    const signature = req.headers['x-stringee-signature'];
+    if (process.env.NODE_ENV === 'production' && !signature) {
+      console.warn('Blocked webhook missing signature');
+      return res.status(401).json({ message: 'Missing signature' });
+    }
+
     const { event, call_id, recording_url, from, to, duration, state } = req.body;
 
     if (event === 'call.ended' && recording_url) {

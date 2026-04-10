@@ -2,6 +2,7 @@ require('dotenv').config();
 const express = require('express');
 const cors = require('cors');
 const { PrismaClient } = require('@prisma/client');
+const { helmetOptions, globalLimiter, errorHandler } = require('./services/securityMiddleware');
 
 const prisma = new PrismaClient();
 const app = express();
@@ -9,8 +10,21 @@ const PORT = process.env.PORT || 5000;
 
 const path = require('path');
 
-app.use(cors());
-app.use(express.json());
+app.use(helmetOptions); // Apply security headers using Helmet
+app.use(globalLimiter); // Apply global rate limiter
+
+const corsOptions = {
+  origin: process.env.ALLOWED_ORIGINS ? process.env.ALLOWED_ORIGINS.split(',') : ['http://localhost:5173', 'http://127.0.0.1:5173'],
+  credentials: true,
+  methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE'],
+  allowedHeaders: ['Content-Type', 'Authorization', 'Cache-Control'],
+  maxAge: 86400
+};
+app.use(cors(corsOptions));
+
+// Request Size Limiter
+app.use(express.json({ limit: '1mb' }));
+app.use(express.urlencoded({ limit: '1mb', extended: true }));
 // Static files
 app.use('/uploads', express.static(path.join(__dirname, '../uploads')));
 app.use(express.static(path.join(__dirname, '../../frontend/dist')));
@@ -42,6 +56,9 @@ app.use('/api/dispatch', dispatchRoutes);
 // Start background job
 startSlaChecker();
 startLarkReporter();
+
+// Ensure Global Error Handler is the last middleware before 404/SPA handling
+app.use(errorHandler);
 
 // Handle SPA routing
 app.use((req, res) => {

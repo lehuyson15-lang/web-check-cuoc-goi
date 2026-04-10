@@ -6,10 +6,12 @@ const { authMiddleware } = require('../services/authMiddleware');
 const { processSTT } = require('../services/sttProcessor');
 const path = require('path');
 const fs = require('fs');
+const { auditLog } = require('../services/auditLogger');
+const { sanitizeInput } = require('../services/securityMiddleware');
 
 const prisma = new PrismaClient();
 
-// Configure storage to preserve file extension (required by Whisper API)
+// Configure storage and enforce file type for audio
 const storage = multer.diskStorage({
   destination: function (req, file, cb) {
     cb(null, 'uploads/')
@@ -20,10 +22,22 @@ const storage = multer.diskStorage({
   }
 });
 
-const upload = multer({ storage: storage });
+const audioFilter = (req, file, cb) => {
+  if (file.mimetype.startsWith('audio/') || file.mimetype.startsWith('video/')) {
+    cb(null, true);
+  } else {
+    cb(new Error('Invalid file type. Only audio and video are allowed.'), false);
+  }
+};
+
+const upload = multer({ 
+  storage: storage,
+  fileFilter: audioFilter,
+  limits: { fileSize: 25 * 1024 * 1024 } // 25 MB limit
+});
 
 // Create call (manual upload)
-router.post('/upload', authMiddleware, upload.single('audio'), async (req, res) => {
+router.post('/upload', authMiddleware, sanitizeInput, upload.single('audio'), async (req, res) => {
   try {
     console.log('[Upload] Received request:', req.body);
     console.log('[Upload] File:', req.file);
@@ -166,7 +180,7 @@ router.get('/:id', authMiddleware, async (req, res) => {
 });
 
 // Update call (notes)
-router.patch('/:id', authMiddleware, async (req, res) => {
+router.patch('/:id', authMiddleware, sanitizeInput, async (req, res) => {
   try {
     const { id } = req.params;
     const { notes, customerStatus } = req.body;
@@ -202,7 +216,17 @@ router.delete('/:id', authMiddleware, async (req, res) => {
       return res.status(403).json({ message: 'Only Admin can delete records' });
     }
 
-    await prisma.call.delete({ where: { id } });
+    const deletedCall = await prisma.call.delete({ where: { id } });
+    
+    await auditLog({
+      userId: req.user.userId,
+      action: 'DELETE',
+      resource: 'Call',
+      resourceId: id,
+      ipAddress: req.ip,
+      details: { deletedCallId: deletedCall.id }
+    });
+
     res.json({ message: 'Call deleted successfully' });
   } catch (error) {
     console.error('[Delete Call] Error:', error);

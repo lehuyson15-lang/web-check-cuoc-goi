@@ -6,6 +6,8 @@ const jwt = require('jsonwebtoken');
 const multer = require('multer');
 const path = require('path');
 const { authMiddleware, adminMiddleware } = require('../services/authMiddleware');
+const { loginLimiter } = require('../services/securityMiddleware');
+const { auditLog, loginAttemptLog } = require('../services/auditLogger');
 
 const prisma = new PrismaClient();
 
@@ -20,8 +22,8 @@ const storage = multer.diskStorage({
 });
 const upload = multer({ storage: storage });
 
-// Register
-router.post('/register', async (req, res) => {
+// Register - Admin Only
+router.post('/register', authMiddleware, adminMiddleware, async (req, res) => {
   try {
     const { 
       name, email, password, role, extensionVoip,
@@ -29,6 +31,11 @@ router.post('/register', async (req, res) => {
       targetCallsPerDay, targetConversionsPerDay 
     } = req.body;
     
+    // Validate strong password
+    if (!password || password.length < 8 || !/(?=.*[a-z])(?=.*[A-Z])(?=.*\d)/.test(password)) {
+      return res.status(400).json({ message: 'Password must be at least 8 characters long and include uppercase, lowercase, and numbers' });
+    }
+
     const existingUser = await prisma.user.findUnique({ where: { email } });
     if (existingUser) {
       return res.status(400).json({ message: 'User already exists' });
@@ -54,13 +61,21 @@ router.post('/register', async (req, res) => {
       }
     });
 
-    const token = jwt.sign(
-      { userId: user.id, role: user.role },
-      process.env.JWT_SECRET,
-      { expiresIn: process.env.JWT_EXPIRES_IN }
-    );
+    // Do NOT generate a token since Admin is creating the user
+    // Send back user without password
+    const { password: _, ...userWithoutPassword } = user;
+    
+    await auditLog({
+      userId: req.user.userId,
+      action: 'CREATE',
+      resource: 'User',
+      resourceId: user.id,
+      ipAddress: req.ip,
+      userAgent: req.get('User-Agent'),
+      details: { createdEmail: email, role }
+    });
 
-    res.status(201).json({ token, user });
+    res.status(201).json({ user: userWithoutPassword, message: 'User created successfully' });
   } catch (error) {
     console.error('[Register] Error:', error);
     res.status(500).json({ message: 'Internal server error', error: error.message });
@@ -68,23 +83,47 @@ router.post('/register', async (req, res) => {
 });
 
 // Login
-router.post('/login', async (req, res) => {
+router.post('/login', loginLimiter, async (req, res) => {
   try {
     const { email, password } = req.body;
 
     const user = await prisma.user.findUnique({ where: { email } });
     if (!user) {
+      await loginAttemptLog({ ipAddress: req.ip, email, success: false });
       return res.status(400).json({ message: 'Invalid credentials' });
+    }
+
+    if (user.isLocked) {
+      return res.status(403).json({ message: `Account is locked. Reason: ${user.lockReason || 'Security violation'}. Please contact Admin.` });
     }
 
     const isMatch = await bcrypt.compare(password, user.password);
     if (!isMatch) {
+      await loginAttemptLog({ ipAddress: req.ip, email, success: false });
       return res.status(400).json({ message: 'Invalid credentials' });
     }
 
     if (user.status === 'pending') {
       return res.status(403).json({ message: 'Tài khoản của bạn đang chờ Admin duyệt' });
     }
+
+    await prisma.user.update({
+      where: { id: user.id },
+      data: {
+        lastLoginAt: new Date(),
+        lastLoginIP: req.ip
+      }
+    });
+
+    await loginAttemptLog({ ipAddress: req.ip, email, success: true });
+    
+    await auditLog({
+      userId: user.id,
+      action: 'LOGIN',
+      resource: 'Auth',
+      ipAddress: req.ip,
+      userAgent: req.get('User-Agent')
+    });
 
     const token = jwt.sign(
       { userId: user.id, role: user.role },
@@ -138,6 +177,15 @@ router.put('/profile', authMiddleware, upload.single('avatar'), async (req, res)
       data: dataToUpdate
     });
 
+    await auditLog({
+      userId,
+      action: 'UPDATE',
+      resource: 'User Profile',
+      resourceId: userId,
+      ipAddress: req.ip,
+      details: { updatedFields: Object.keys(dataToUpdate) }
+    });
+
     const { password, ...userWithoutPassword } = updatedUser;
     res.json(userWithoutPassword);
   } catch (error) {
@@ -168,6 +216,14 @@ router.put('/change-password', authMiddleware, async (req, res) => {
     await prisma.user.update({
       where: { id: userId },
       data: { password: hashedPassword }
+    });
+
+    await auditLog({
+      userId,
+      action: 'UPDATE',
+      resource: 'User Password',
+      resourceId: userId,
+      ipAddress: req.ip
     });
 
     res.json({ message: 'Đổi mật khẩu thành công' });

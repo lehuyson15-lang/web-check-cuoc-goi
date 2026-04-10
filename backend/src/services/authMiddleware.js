@@ -1,6 +1,8 @@
 const jwt = require('jsonwebtoken');
+const { PrismaClient } = require('@prisma/client');
+const prisma = new PrismaClient();
 
-const authMiddleware = (req, res, next) => {
+const authMiddleware = async (req, res, next) => {
   const token = req.header('Authorization')?.replace('Bearer ', '');
 
   if (!token) {
@@ -9,10 +11,29 @@ const authMiddleware = (req, res, next) => {
 
   try {
     const decoded = jwt.verify(token, process.env.JWT_SECRET);
+    
+    // Verify user still exists and check status
+    const user = await prisma.user.findUnique({
+      where: { id: decoded.userId },
+      select: { id: true, role: true, status: true, isLocked: true }
+    });
+
+    if (!user) {
+      return res.status(401).json({ message: 'User account no longer exists' });
+    }
+    
+    if (user.isLocked) {
+      return res.status(403).json({ message: 'Account is locked. Please contact Admin.' });
+    }
+
+    if (user.status === 'pending') {
+      return res.status(403).json({ message: 'User status is pending. Please contact Admin.' });
+    }
+
     req.user = decoded;
     next();
   } catch (error) {
-    res.status(401).json({ message: 'Token is not valid' });
+    res.status(401).json({ message: 'Token is not valid or expired' });
   }
 };
 

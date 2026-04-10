@@ -28,8 +28,44 @@ export const AuthProvider = ({ children }) => {
     );
 
     setLoading(false);
-    return () => axios.interceptors.response.eject(interceptor);
+    return () => {
+      axios.interceptors.response.eject(interceptor);
+    };
   }, []);
+
+  // Idle Session Timeout
+  useEffect(() => {
+    let timeoutId;
+    // 30 minutes = 30 * 60 * 1000
+    const IDLE_TIMEOUT_MS = 30 * 60 * 1000; 
+
+    const handleActivity = () => {
+      clearTimeout(timeoutId);
+      if (user) {
+        timeoutId = setTimeout(() => {
+          console.log('[Security] Session expired due to inactivity');
+          logout();
+          window.location.href = '/login';
+        }, IDLE_TIMEOUT_MS);
+      }
+    };
+
+    if (user) {
+      handleActivity();
+      window.addEventListener('mousemove', handleActivity);
+      window.addEventListener('keydown', handleActivity);
+      window.addEventListener('click', handleActivity);
+      window.addEventListener('scroll', handleActivity);
+    }
+
+    return () => {
+      clearTimeout(timeoutId);
+      window.removeEventListener('mousemove', handleActivity);
+      window.removeEventListener('keydown', handleActivity);
+      window.removeEventListener('click', handleActivity);
+      window.removeEventListener('scroll', handleActivity);
+    };
+  }, [user]);
 
   const login = async (email, password) => {
     const res = await axios.post('/api/auth/login', { email, password });

@@ -2,6 +2,7 @@ const express = require('express');
 const router = express.Router();
 const { PrismaClient } = require('@prisma/client');
 const { authMiddleware, adminMiddleware, managerMiddleware } = require('../services/authMiddleware');
+const { sanitizeInput } = require('../services/securityMiddleware');
 
 const prisma = new PrismaClient();
 
@@ -26,7 +27,7 @@ router.get('/queues', authMiddleware, managerMiddleware, async (req, res) => {
 });
 
 // ── POST /queues — Create a new dispatch queue ────────────────────────────────
-router.post('/queues', authMiddleware, managerMiddleware, async (req, res) => {
+router.post('/queues', authMiddleware, managerMiddleware, sanitizeInput, async (req, res) => {
   const { name, memberIds } = req.body;
   if (!name) return res.status(400).json({ error: 'Queue name is required' });
 
@@ -57,7 +58,7 @@ router.post('/queues', authMiddleware, managerMiddleware, async (req, res) => {
 });
 
 // ── PUT /queues/:id — Update a queue (name, members, order) ──────────────────
-router.put('/queues/:id', authMiddleware, managerMiddleware, async (req, res) => {
+router.put('/queues/:id', authMiddleware, managerMiddleware, sanitizeInput, async (req, res) => {
   const { id } = req.params;
   const { name, members } = req.body; // members: [{ userId, sortOrder, isActive }]
 
@@ -124,7 +125,7 @@ router.delete('/queues/:id', authMiddleware, adminMiddleware, async (req, res) =
 });
 
 // ── POST /up — Round-robin assign a phone number ─────────────────────────────
-router.post('/up', authMiddleware, managerMiddleware, async (req, res) => {
+router.post('/up', authMiddleware, managerMiddleware, sanitizeInput, async (req, res) => {
   const { customerPhone, customerName, source, queueId, slaMinutes = 15 } = req.body;
 
   if (!customerPhone) return res.status(400).json({ error: 'Phone number is required' });
@@ -235,7 +236,7 @@ router.post('/up', authMiddleware, managerMiddleware, async (req, res) => {
 });
 
 // ── POST /up-bulk — Dispatch multiple phone numbers ──────────────────────────
-router.post('/up-bulk', authMiddleware, managerMiddleware, async (req, res) => {
+router.post('/up-bulk', authMiddleware, managerMiddleware, sanitizeInput, async (req, res) => {
   const { phones, queueId, source, slaMinutes = 15 } = req.body;
   // phones: [{ phone, name }]
   
@@ -342,7 +343,7 @@ router.get('/history', authMiddleware, managerMiddleware, async (req, res) => {
 });
 
 // ── PATCH /:id/status — Update dispatch status ──────────────────────────────
-router.patch('/:id/status', authMiddleware, async (req, res) => {
+router.patch('/:id/status', authMiddleware, sanitizeInput, async (req, res) => {
   const { id } = req.params;
   const { status, note } = req.body; // PENDING, CALLED, CANCELLED
 

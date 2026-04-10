@@ -2,6 +2,7 @@ const express = require('express');
 const router = express.Router();
 const { PrismaClient } = require('@prisma/client');
 const { authMiddleware, adminMiddleware } = require('../services/authMiddleware');
+const { auditLog } = require('../services/auditLogger');
 
 const prisma = new PrismaClient();
 
@@ -236,6 +237,15 @@ router.post('/send-lark', authMiddleware, adminMiddleware, async (req, res) => {
     const { type } = req.body; // 'daily', 'weekly', 'monthly'
     const { sendTestReport } = require('../cron/larkReporter');
     await sendTestReport(type);
+    
+    await auditLog({
+      userId: req.user.userId,
+      action: 'ACTION',
+      resource: 'Report',
+      ipAddress: req.ip,
+      details: { reportType: type }
+    });
+
     res.json({ message: `Đã gửi lệnh báo cáo ${type} qua Lark thành công.` });
   } catch (error) {
     console.error('[Send Lark API] Error:', error);

@@ -2,6 +2,8 @@ const express = require('express');
 const router = express.Router();
 const { PrismaClient } = require('@prisma/client');
 const { authMiddleware, adminMiddleware } = require('../services/authMiddleware');
+const { sanitizeInput } = require('../services/securityMiddleware');
+const { auditLog } = require('../services/auditLogger');
 
 const prisma = new PrismaClient();
 
@@ -29,7 +31,7 @@ router.get('/', authMiddleware, async (req, res) => {
 });
 
 // Admin assigning a lead
-router.post('/', authMiddleware, adminMiddleware, async (req, res) => {
+router.post('/', authMiddleware, adminMiddleware, sanitizeInput, async (req, res) => {
   const { customerPhone, customerName, assignedToId, slaMinutes = 15 } = req.body;
   
   if (!customerPhone || !assignedToId) return res.status(400).json({ error: 'Missing fields' });
@@ -55,7 +57,7 @@ router.post('/', authMiddleware, adminMiddleware, async (req, res) => {
 });
 
 // Update lead status (e.g. staff marks as CONTACTED)
-router.patch('/:id/status', authMiddleware, async (req, res) => {
+router.patch('/:id/status', authMiddleware, sanitizeInput, async (req, res) => {
   const { id } = req.params;
   const { status } = req.body; // e.g. "CONTACTED"
 
@@ -76,6 +78,15 @@ router.delete('/:id', authMiddleware, adminMiddleware, async (req, res) => {
   const { id } = req.params;
   try {
     await prisma.lead.delete({ where: { id } });
+    
+    await auditLog({
+      userId: req.user.userId,
+      action: 'DELETE',
+      resource: 'Lead',
+      resourceId: id,
+      ipAddress: req.ip
+    });
+
     res.json({ message: 'Lead deleted' });
   } catch (error) {
     console.error(error);
